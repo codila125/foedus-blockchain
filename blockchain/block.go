@@ -1,32 +1,35 @@
+// Package blockchain implements a simple blockchain with basic functionalities.
 package blockchain
 
-import (
-	"bytes"
-	"crypto/sha256"
-)
-
 type Block struct {
-	Hash	 []byte
+	Hash     []byte
 	Data     []byte
 	PrevHash []byte
+	Nonce    int
 }
 
 type BlockChain struct {
 	Blocks []*Block
 }
 
-func (b *Block) CreateHash() {
-	info := bytes.Join([][]byte{b.Data, b.PrevHash}, []byte{})
-	hash := sha256.Sum256(info)
-	b.Hash = hash[:]
-}
+//func (b *Block) CreateHash() {
+//	info := bytes.Join([][]byte{b.Data, b.PrevHash}, []byte{})
+//	hash := sha256.Sum256(info)
+//	b.Hash = hash[:]
+//}
 
 func CreateBlock(data, prevhash []byte) *Block {
 	block := &Block{
-		Data:    data,
+		Data:     data,
 		PrevHash: prevhash,
+		Nonce:    0,
 	}
-	block.CreateHash()
+	pow := NewProof(block)
+	nonce, hash := pow.Run()
+
+	block.Hash = hash[:]
+	block.Nonce = nonce
+
 	return block
 }
 
@@ -40,7 +43,7 @@ func Genesis() *Block {
 	return CreateBlock([]byte("Genesis Block"), []byte{})
 }
 
-func NewBlockChain() *BlockChain{
+func NewBlockChain() *BlockChain {
 	return &BlockChain{
 		Blocks: []*Block{Genesis()},
 	}
