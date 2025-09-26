@@ -3,8 +3,12 @@ module go_blockchain
 go 1.25.1
 
 require (
+	github.com/dgraph-io/badger/v4 v4.8.0
+	github.com/mr-tron/base58 v1.2.0
+)
+
+require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/dgraph-io/badger/v4 v4.8.0 // indirect
 	github.com/dgraph-io/ristretto/v2 v2.2.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect

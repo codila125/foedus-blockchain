@@ -15,17 +15,6 @@ type Transcation struct {
 	Output []TxOutput
 }
 
-type TxOutput struct {
-	Value  int
-	PubKey string
-}
-
-type TxInput struct {
-	ID  []byte
-	Out int
-	Sig string
-}
-
 func (tx *Transcation) SetID() {
 	var encoded bytes.Buffer
 	var hash [32]byte
@@ -54,14 +43,6 @@ func CoinbaseTx(to, data string) *Transcation {
 
 func (tx *Transcation) IsCoinbase() bool {
 	return len(tx.Inputs) == 1 && len(tx.Inputs[0].ID) == 0 && tx.Inputs[0].Out == -1
-}
-
-func (in *TxInput) CanUnlockOutputWith(unlockingData string) bool {
-	return in.Sig == unlockingData
-}
-
-func (out *TxOutput) CanBeUnlockedWith(unlockingData string) bool {
-	return out.PubKey == unlockingData
 }
 
 func NewTranscation(from, to string, amount int, bc *BlockChain) *Transcation {
