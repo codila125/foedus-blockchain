@@ -5,7 +5,9 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
+	"fmt"
 	"log"
+	"math/big"
 )
 
 const (
@@ -30,6 +32,16 @@ func (w Wallet) Address() []byte {
 	return address
 }
 
+func ValidateAddress(address string) bool {
+	fullHash := Base58Decode([]byte(address))
+	actualChecksum := fullHash[len(fullHash)-checksumLength:]
+	version := fullHash[0]
+	pubKeyHash := fullHash[1 : len(fullHash)-checksumLength]
+	targetChecksum := Checksum(append([]byte{version}, pubKeyHash...))
+
+	return string(actualChecksum) == string(targetChecksum)
+}
+
 func NewKeyPair() (ecdsa.PrivateKey, []byte) {
 	curve := elliptic.P256()
 
@@ -38,7 +50,7 @@ func NewKeyPair() (ecdsa.PrivateKey, []byte) {
 		log.Panic(err)
 	}
 
-	pub := append(private.PublicKey.X.Bytes(), private.PublicKey.Y.Bytes()...)
+	pub := append(private.X.Bytes(), private.Y.Bytes()...)
 	return *private, pub
 }
 
@@ -51,7 +63,7 @@ func MakeWallet() *Wallet {
 
 func PublicKeyHash(pubKey []byte) []byte {
 	pubHash := sha256.Sum256(pubKey)
-	return pubHash[:]	
+	return pubHash[:]
 }
 
 func Checksum(payload []byte) []byte {
@@ -60,3 +72,31 @@ func Checksum(payload []byte) []byte {
 
 	return secondHash[:checksumLength]
 }
+
+func (w *Wallet) ReconstructECDSAKey() (*ecdsa.PrivateKey, error) {
+	curve := elliptic.P256() // Assuming P256 is always used for this blockchain
+
+	d := new(big.Int).SetBytes(w.PrivateKey)
+
+	// Reconstruct X and Y from PublicKey
+	pubKeyLen := len(w.PublicKey)
+	if pubKeyLen%2 != 0 {
+		return nil, fmt.Errorf("invalid public key length for reconstruction")
+	}
+	x := new(big.Int).SetBytes(w.PublicKey[:pubKeyLen/2])
+	y := new(big.Int).SetBytes(w.PublicKey[pubKeyLen/2:])
+
+	publicKey := ecdsa.PublicKey{
+		Curve: curve,
+		X:     x,
+		Y:     y,
+	}
+
+	privateKey := &ecdsa.PrivateKey{
+		PublicKey: publicKey,
+		D:         d,
+	}
+
+	return privateKey, nil
+}
+

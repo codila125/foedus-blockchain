@@ -10,7 +10,7 @@ import (
 
 type Block struct {
 	Hash         []byte
-	Transactions []*Transcation
+	Transactions []*Transaction
 	PrevHash     []byte
 	Nonce        int
 }
@@ -25,7 +25,7 @@ type Block struct {
 //	b.Hash = hash[:]
 //}
 
-func CreateBlock(txs []*Transcation, prevhash []byte) *Block {
+func CreateBlock(txs []*Transaction, prevhash []byte) *Block {
 	block := &Block{
 		Transactions: txs,
 		PrevHash:     prevhash,
@@ -57,8 +57,8 @@ func (b *Block) HashTransactions() []byte {
 	return txHash[:]
 }
 
-func Genesis(coinbase *Transcation) *Block {
-	return CreateBlock([]*Transcation{coinbase}, []byte{})
+func Genesis(coinbase *Transaction) *Block {
+	return CreateBlock([]*Transaction{coinbase}, []byte{})
 }
 
 // func NewBlockChain() *BlockChain {

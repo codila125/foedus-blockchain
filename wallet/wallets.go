@@ -4,12 +4,11 @@ import (
 	"bytes"
 	"crypto/elliptic"
 	"encoding/gob"
-	"fmt"
 	"log"
 	"os"
 )
 
-const walletFile = "./tmp/wallets.data"
+const walletFile = "./temp/wallets.data"
 
 type Wallets struct {
 	Wallets map[string]*Wallet
@@ -26,7 +25,7 @@ func CreateWallets() (*Wallets, error) {
 
 func (ws *Wallets) AddWallet() string {
 	wallet := MakeWallet()
-	address := fmt.Sprintf("%s", wallet.Address())
+	address := string(wallet.Address())
 
 	ws.Wallets[address] = wallet
 
