@@ -15,16 +15,6 @@ type Block struct {
 	Nonce        int
 }
 
-// type BlockChain struct {
-// 	Blocks []*Block
-// }
-
-//func (b *Block) CreateHash() {
-//	info := bytes.Join([][]byte{b.Data, b.PrevHash}, []byte{})
-//	hash := sha256.Sum256(info)
-//	b.Hash = hash[:]
-//}
-
 func CreateBlock(txs []*Transaction, prevhash []byte) *Block {
 	block := &Block{
 		Transactions: txs,
@@ -40,12 +30,6 @@ func CreateBlock(txs []*Transaction, prevhash []byte) *Block {
 	return block
 }
 
-// func (blockchain *BlockChain) AddBlock(data string) {
-// 	prevBlock := blockchain.Blocks[len(blockchain.Blocks)-1]
-// 	newBlock := CreateBlock([]byte(data), prevBlock.Hash)
-// 	blockchain.Blocks = append(blockchain.Blocks, newBlock)
-// }
-
 func (b *Block) HashTransactions() []byte {
 	var transactions [][]byte
 	var txHash [32]byte
@@ -60,12 +44,6 @@ func (b *Block) HashTransactions() []byte {
 func Genesis(coinbase *Transaction) *Block {
 	return CreateBlock([]*Transaction{coinbase}, []byte{})
 }
-
-// func NewBlockChain() *BlockChain {
-// 	return &BlockChain{
-// 		Blocks: []*Block{Genesis()},
-// 	}
-// }
 
 func (b *Block) Serialize() []byte {
 	var result bytes.Buffer
