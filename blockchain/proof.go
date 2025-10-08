@@ -10,16 +10,19 @@ import (
 	"math/big"
 )
 
-const Difficulty = 12
+const Difficulty = 12 // Difficulty is the number of leading zero bits required in the hash
 
 type ProofOfWork struct {
-	Block  *Block
-	Target *big.Int
+	Block  *Block   // The block to be mined
+	Target *big.Int // The target value that the hash must be less than
 }
 
 func NewProof(b *Block) *ProofOfWork {
-	target := big.NewInt(1)
-	target.Lsh(target, uint(256-Difficulty))
+	/*
+		Creates a new Proof of Work instance for the given block.
+	*/
+	target := big.NewInt(1)                  // Initialize target to 1
+	target.Lsh(target, uint(256-Difficulty)) // Left shift the target to set the difficulty
 
 	pow := &ProofOfWork{b, target}
 
@@ -27,10 +30,13 @@ func NewProof(b *Block) *ProofOfWork {
 }
 
 func (pow *ProofOfWork) InitData(nonce int) []byte {
+	/*
+		Initializes the data for the Proof of Work algorithm with the given nonce.
+	*/
 	data := bytes.Join(
 		[][]byte{
 			pow.Block.PrevHash,
-			pow.Block.HashTransactions(),
+			pow.Block.HashTransactions(), // Merkle root of transactions
 			ToHex(int64(nonce)),
 			ToHex(int64(Difficulty)),
 		},
@@ -40,6 +46,10 @@ func (pow *ProofOfWork) InitData(nonce int) []byte {
 }
 
 func (pow *ProofOfWork) Validate() bool {
+	/*
+		Validates the Proof of Work by checking if the hash of the block is less than the target.
+		Returns true if valid, false otherwise.
+	*/
 	var intHash big.Int
 
 	data := pow.InitData(pow.Block.Nonce)
@@ -51,6 +61,9 @@ func (pow *ProofOfWork) Validate() bool {
 }
 
 func ToHex(num int64) []byte {
+	/*
+		Converts an int64 number to a byte slice in big-endian order.
+	*/
 	buffer := new(bytes.Buffer)
 	err := binary.Write(buffer, binary.BigEndian, int64(num))
 	if err != nil {
@@ -61,18 +74,24 @@ func ToHex(num int64) []byte {
 }
 
 func (pow *ProofOfWork) Run() (int, []byte) {
+	/*
+		Executes the Proof of Work algorithm to find a valid nonce and hash.
+		Returns the valid nonce and the corresponding hash.
+	*/
 	var intHash big.Int
 	var hash [32]byte
 
 	nonce := 0
 
+	// Iterate until a valid nonce is found or the maximum integer value is reached
 	for nonce < math.MaxInt64 {
-		data := pow.InitData(nonce)
-		hash = sha256.Sum256(data)
+		data := pow.InitData(nonce) // Prepare the data with the current nonce
+		hash = sha256.Sum256(data)  // Compute the SHA-256 hash of the data
 
 		fmt.Printf("\r%x", hash)
 		intHash.SetBytes(hash[:])
 
+		// Check if the hash meets the target
 		if intHash.Cmp(pow.Target) == -1 {
 			break
 		} else {

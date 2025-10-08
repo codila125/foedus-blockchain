@@ -15,6 +15,9 @@ import (
 type CommandLine struct{}
 
 func (cli *CommandLine) printUsage() {
+	/*
+		Prints the usage instructions for the command line interface.
+	*/
 	fmt.Println("Usage:")
 	fmt.Println(" getbalance -address <ADDRESS> : get the balance for an address")
 	fmt.Println(" createblockchain -address <ADDRESS> : creates a blockchain and sends genesis reward to address")
@@ -26,6 +29,10 @@ func (cli *CommandLine) printUsage() {
 }
 
 func (cli *CommandLine) validateArgs() {
+	/*
+			Validates that at least one command line argument is provided.
+		   If no arguments are provided, it prints the usage instructions and exits the program.
+	*/
 	if len(os.Args) < 2 {
 		cli.printUsage()
 		runtime.Goexit()
@@ -33,6 +40,9 @@ func (cli *CommandLine) validateArgs() {
 }
 
 func (cli *CommandLine) listAddresses() {
+	/*
+		Lists all wallet addresses stored in the wallet file.
+	*/
 	wallets, _ := wallet.CreateWallets()
 	addresses := wallets.GetAllAddresses()
 
@@ -42,6 +52,9 @@ func (cli *CommandLine) listAddresses() {
 }
 
 func (cli *CommandLine) createWallet() {
+	/*
+		Creates a new wallet, saves it to the wallet file, and prints the new address.
+	*/
 	wallets, _ := wallet.CreateWallets()
 	address := wallets.AddWallet()
 	wallets.SaveFile()
@@ -50,22 +63,27 @@ func (cli *CommandLine) createWallet() {
 }
 
 func (cli *CommandLine) printChain() {
-	chain := blockchain.ContinueBlockChain()
+	/*
+		Prints all the blocks in the blockchain along with their details.
+	*/
+	chain := blockchain.ContinueBlockChain() // Load the existing blockchain
 	defer chain.Database.Close()
 	iter := chain.Iterator()
 
+	// Iterate through the blocks in the blockchain and print their details
 	for {
-		block := iter.Next()
+		block := iter.Next() // Get the next block
 
 		fmt.Printf("Prev. hash: %x\n", block.PrevHash)
 		fmt.Printf("Hash: %x\n", block.Hash)
-		pow := blockchain.NewProof(block)
-		fmt.Printf("PoW: %s\n", strconv.FormatBool(pow.Validate()))
+		pow := blockchain.NewProof(block)                           // Create a new Proof of Work for the block
+		fmt.Printf("PoW: %s\n", strconv.FormatBool(pow.Validate())) // Validate the Proof of Work beacuse everytime we print the block we want to make sure the PoW is valid
 		for _, tx := range block.Transactions {
 			fmt.Println(tx)
 		}
 		fmt.Println()
 
+		// Break the loop if we reach the genesis block (no previous hash)
 		if len(block.PrevHash) == 0 {
 			break
 		}
@@ -73,73 +91,92 @@ func (cli *CommandLine) printChain() {
 }
 
 func (cli *CommandLine) createBlockChain(address string) {
-	if !wallet.ValidateAddress(address) {
+	/*
+		Creates a new blockchain and sends the genesis block reward to the specified address.
+		Also initializes the UTXO set for the new blockchain.
+	*/
+	if !wallet.ValidateAddress(address) { // Validate the provided address
 		log.Panic("Address is not valid")
 	}
 
-	chain := blockchain.NewBlockChain(address)
-	chain.Database.Close()
+	chain := blockchain.NewBlockChain(address) // Create a new blockchain with the genesis block
+	chain.Database.Close()                     // Close the database connection
 
 	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
-	UTXOSet.Reindex()
+	UTXOSet.Reindex() // Rebuild the UTXO set from the blockchain
 
 	fmt.Println("Finished!")
 }
 
 func (cli *CommandLine) getBalance(address string) {
+	/*
+		Calculates and prints the balance of the specified address by summing its unspent transaction outputs (UTXOs).
+	*/
 	if !wallet.ValidateAddress(address) {
 		log.Panic("Address is not valid")
 	}
 
-	chain := blockchain.ContinueBlockChain()
+	// Load the existing blockchain and rebuild the UTXO set
+	chain := blockchain.ContinueBlockChain() // Load the existing blockchain
 	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
-	UTXOSet.Reindex()
+	UTXOSet.Reindex() // Rebuild the UTXO set
 	defer chain.Database.Close()
 
 	balance := 0
-	pubKeyHash := wallet.Base58Decode([]byte(address))
-	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-4]
-	UTXOs := UTXOSet.FindUnspentTransactions(pubKeyHash)
+	pubKeyHash := wallet.Base58Decode([]byte(address))   // Decode the address to get the public key hash
+	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-4]       // Remove the version byte and checksum
+	UTXOs := UTXOSet.FindUnspentTransactions(pubKeyHash) // Find all unspent transactions for the public key hash
 
+	// Sum the values of all unspent transaction outputs to get the balance
 	for _, out := range UTXOs {
 		balance += out.Value
 	}
-
 	fmt.Printf("Balance of %s: %d\n", address, balance)
 }
 
 func (cli *CommandLine) send(from, to string, amount int) {
+	/*
+		Creates and sends a new transaction from one address to another, including a coinbase transaction for the sender.
+		Updates the UTXO set after adding the new block to the blockchain.
+	*/
+	// Validate the provided addresses
 	if !wallet.ValidateAddress(from) {
 		log.Panic("from Address is not valid")
 	}
-
 	if !wallet.ValidateAddress(to) {
 		log.Panic("to Address is not valid")
 	}
 
+	// Load the existing blockchain and UTXO set
 	chain := blockchain.ContinueBlockChain()
 	defer chain.Database.Close()
 	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
 	UTXOSet.Reindex()
 
-	tx := blockchain.NewTransaction(from, to, amount, &UTXOSet)
-	cbTx := blockchain.CoinbaseTx(from, "")
-	block := chain.AddBlock([]*blockchain.Transaction{cbTx, tx})
-	UTXOSet.Update(block)
+	tx := blockchain.NewTransaction(from, to, amount, &UTXOSet)  // Create a new transaction
+	cbTx := blockchain.CoinbaseTx(from, "")                      // Create a coinbase transaction for the sender to reward them for mining the block
+	block := chain.AddBlock([]*blockchain.Transaction{cbTx, tx}) // Add a new block containing the coinbase and regular transaction to the blockchain
+	UTXOSet.Update(block)                                        // Update the UTXO set with the new block
 	fmt.Println("Success!")
 }
 
 func (cli *CommandLine) reindexUTXO() {
-	chain := blockchain.ContinueBlockChain()
+	/*
+		Rebuilds the UTXO set from the current state of the blockchain.
+	*/
+	chain := blockchain.ContinueBlockChain() // Load the existing blockchain
 	defer chain.Database.Close()
-	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
-	UTXOSet.Reindex()
+	UTXOSet := blockchain.UTXOSet{Blockchain: chain} // Create a UTXO set instance
+	UTXOSet.Reindex()                                // Rebuild the UTXO set
 
-	count := UTXOSet.CountTransactions()
+	count := UTXOSet.CountTransactions() // Count the number of transactions in the UTXO set
 	fmt.Printf("Done! There are %d transactions in the UTXO set.\n", count)
 }
 
 func (cli *CommandLine) Run() {
+	/*
+		Parses and executes the command line arguments.
+	*/
 	cli.validateArgs()
 
 	getBalanceCmd := flag.NewFlagSet("getbalance", flag.ExitOnError)

@@ -34,6 +34,10 @@ func (tx *Transaction) Serialize() []byte {
 }
 
 func (tx *Transaction) Hash() []byte {
+	/*
+		Computes the hash of the transaction.
+		Returns the SHA-256 hash of the serialized transaction.
+	*/
 	var hash [32]byte
 
 	txCopy := *tx
@@ -45,38 +49,56 @@ func (tx *Transaction) Hash() []byte {
 }
 
 func CoinbaseTx(to, data string) *Transaction {
+	/*
+		Creates a coinbase transaction that rewards the miner.
+		'to' is the address to send the reward to.
+		'data' is arbitrary data, often used to include a message or extra information.
+	*/
 	if data == "" {
-		randData := make([]byte, 20)
+		randData := make([]byte, 20) // Generate 20 random bytes
 		_, err := rand.Read(randData)
 		if err != nil {
 			log.Panic(err)
 		}
-		data = fmt.Sprintf("%x", randData)
+		data = fmt.Sprintf("%x", randData) // Convert random bytes to a hex string
 	}
 
-	txin := TxInput{[]byte{}, -1, nil, []byte(data)}
-	txout := NewTxOutput(20, to)
+	txin := TxInput{[]byte{}, -1, nil, []byte(data)} // Coinbase input has no previous transaction, hence ID is empty and Out is -1
+	txout := NewTxOutput(20, to)                     // Coinbase transaction typically has a fixed reward, here set to 20
 
-	tx := Transaction{nil, []TxInput{txin}, []TxOutput{*txout}}
-	tx.ID = tx.Hash()
+	tx := Transaction{nil, []TxInput{txin}, []TxOutput{*txout}} // Create the transaction with the input and output
+	tx.ID = tx.Hash()                                           // Set the transaction ID by hashing the transaction
 
 	return &tx
 }
 
 func (tx *Transaction) IsCoinbase() bool {
+	/*
+		Checks if the transaction is a coinbase transaction.
+		Returns true if the transaction has exactly one input and that input has an empty ID and an Out value of -1.
+	*/
 	return len(tx.Inputs) == 1 && len(tx.Inputs[0].ID) == 0 && tx.Inputs[0].Out == -1
 }
 
 func NewTransaction(from, to string, amount int, UTXO *UTXOSet) *Transaction {
+	/*
+		Creates a new transaction from one address to another.
+		'from' is the sender's address.
+		'to' is the recipient's address.
+		'amount' is the amount to send.
+		'UTXO' is the UTXO set used to find spendable outputs.
+	*/
 	var inputs []TxInput
 	var outputs []TxOutput
 
-	wallets, err := wallet.CreateWallets()
+	wallets, err := wallet.CreateWallets() // Load existing wallets
 	Handle(err)
-	w := wallets.GetWallet(from)
-	pubKeyHash := wallet.PublicKeyHash(w.PublicKey)
-	acc, validOutputs := UTXO.FindSpendableOutputs(pubKeyHash, amount)
 
+	w := wallets.GetWallet(from)                                       // Get the wallet for the sender's address
+	pubKeyHash := wallet.PublicKeyHash(w.PublicKey)                    // Get the public key hash from the wallet's public key
+	acc, validOutputs := UTXO.FindSpendableOutputs(pubKeyHash, amount) // Find spendable outputs for the public key hash
+
+	// Check if the accumulated amount is less than the requested amount
 	if acc < amount {
 		log.Panic("ERROR: Not enough funds")
 	}
@@ -85,20 +107,21 @@ func NewTransaction(from, to string, amount int, UTXO *UTXOSet) *Transaction {
 		txID, err := hex.DecodeString(txid)
 		Handle(err)
 
+		// Create a new input for each output which is being used
 		for _, out := range outs {
 			input := TxInput{txID, out, nil, wallet.Base58Decode([]byte(from))}
 			inputs = append(inputs, input)
 		}
 	}
-	outputs = append(outputs, *NewTxOutput(amount, to))
+	outputs = append(outputs, *NewTxOutput(amount, to)) // Create the output to the recipient
 
 	if acc > amount {
-		outputs = append(outputs, *NewTxOutput(acc-amount, from)) // Change
+		outputs = append(outputs, *NewTxOutput(acc-amount, from)) // Create a change output if there's leftover amount
 	}
 
-	tx := Transaction{nil, inputs, outputs}
-	tx.ID = tx.Hash()
-	privatekey, err := w.ReconstructECDSAKey()
+	tx := Transaction{nil, inputs, outputs}    // Create the transaction with inputs and outputs
+	tx.ID = tx.Hash()                          // Sign the transaction to prove ownership of the inputs
+	privatekey, err := w.ReconstructECDSAKey() // Reconstruct the ECDSA private key from the wallet
 	Handle(err)
 	UTXO.Blockchain.SignTransaction(&tx, *privatekey)
 
@@ -106,6 +129,11 @@ func NewTransaction(from, to string, amount int, UTXO *UTXOSet) *Transaction {
 }
 
 func (tx *Transaction) Sign(privKey ecdsa.PrivateKey, prevTXs map[string]Transaction) {
+	/*
+		Signs the transaction using the provided private key and previous transactions.
+		'privKey' is the ECDSA private key used for signing.
+		'prevTXs' is a map of previous transactions referenced by the inputs of this transaction.
+	*/
 	if tx.IsCoinbase() {
 		return
 	}
@@ -116,23 +144,27 @@ func (tx *Transaction) Sign(privKey ecdsa.PrivateKey, prevTXs map[string]Transac
 		}
 	}
 
-	txCopy := tx.TrimmedCopy()
+	txCopy := tx.TrimmedCopy() // Create a trimmed copy of the transaction for signing
 
 	for inID, in := range txCopy.Inputs {
 		prevTx := prevTXs[hex.EncodeToString(in.ID)]
-		txCopy.Inputs[inID].Signature = nil
-		txCopy.Inputs[inID].PubKey = prevTx.Outputs[in.Out].PubKeyHash
-		txCopy.ID = txCopy.Hash()
-		txCopy.Inputs[inID].PubKey = nil
+		txCopy.Inputs[inID].PubKey = prevTx.Outputs[in.Out].PubKeyHash // Set the public key field to the referenced output's public key hash
+		txCopy.ID = txCopy.Hash()                                      // Hash the modified transaction copy
+		txCopy.Inputs[inID].PubKey = nil                               // Clear the public key field again
 
+		// Sign the transaction ID hash with the private key
 		r, s, err := ecdsa.Sign(rand.Reader, &privKey, txCopy.ID)
 		Handle(err)
-		signature := append(r.Bytes(), s.Bytes()...)
+		signature := append(r.Bytes(), s.Bytes()...) // Concatenate r and s to form the signature
 		tx.Inputs[inID].Signature = signature
 	}
 }
 
 func (tx *Transaction) TrimmedCopy() Transaction {
+	/*
+		Creates a trimmed copy of the transaction with empty signatures and public keys in the inputs.
+		Returns the trimmed copy of the transaction.
+	*/
 	var inputs []TxInput
 	var outputs []TxOutput
 
