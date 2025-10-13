@@ -35,7 +35,6 @@ go.work.sum
 .DS_Store
 
 # Temporary files
-temp/blocks/
-temp/wallets.data
+temp/** 
 *.log
 *.swp

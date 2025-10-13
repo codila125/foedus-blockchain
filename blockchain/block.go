@@ -41,7 +41,7 @@ func (b *Block) HashTransactions() []byte {
 
 	// Serialize each transaction and collect them
 	for _, tx := range b.Transactions {
-		transactions = append(transactions, tx.Serialize())
+		transactions = append(transactions, tx.ID)
 	}
 	tree := NewMerkleTree(transactions) // Create a new Merkle tree from the transactions
 
