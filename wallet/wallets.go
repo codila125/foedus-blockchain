@@ -4,24 +4,25 @@ import (
 	"bytes"
 	"crypto/elliptic"
 	"encoding/gob"
+	"fmt"
 	"log"
 	"os"
 )
 
-const walletFile = "./temp/wallets.data"
+const walletFile = "./temp/wallets_%s.data"
 
 type Wallets struct {
 	Wallets map[string]*Wallet // Map of wallet addresses to Wallet instances
 }
 
-func CreateWallets() (*Wallets, error) {
+func CreateWallets(nodeID string) (*Wallets, error) {
 	/*
 		Creates a new Wallets instance and loads existing wallets from the wallet file if it exists.
 	*/
 	wallets := Wallets{}
 	wallets.Wallets = make(map[string]*Wallet)
 
-	err := wallets.LoadFile() // Load existing wallets from file
+	err := wallets.LoadFile(nodeID) // Load existing wallets from file
 
 	return &wallets, err
 }
@@ -58,11 +59,13 @@ func (ws Wallets) GetWallet(address string) Wallet {
 	return *ws.Wallets[address]
 }
 
-func (ws *Wallets) LoadFile() error {
+func (ws *Wallets) LoadFile(nodeID string) error {
 	/*
 		Loads wallets from the wallet file into the Wallets instance.
 		Returns an error if the file does not exist or if there is an issue reading it.
 	*/
+	walletFile := fmt.Sprintf(walletFile, nodeID)
+
 	if _, err := os.Stat(walletFile); os.IsNotExist(err) {
 		return err
 	}
@@ -87,11 +90,12 @@ func (ws *Wallets) LoadFile() error {
 	return nil
 }
 
-func (ws *Wallets) SaveFile() {
+func (ws *Wallets) SaveFile(nodeID string) {
 	/*
 		Saves the Wallets instance to the wallet file.
 	*/
 	var content bytes.Buffer
+	walletFilePath := fmt.Sprintf(walletFile, nodeID)
 
 	gob.Register(elliptic.P256()) // Register the elliptic curve for gob encoding/decoding
 
@@ -101,7 +105,7 @@ func (ws *Wallets) SaveFile() {
 		log.Panic(err)
 	}
 
-	err = os.WriteFile(walletFile, content.Bytes(), 0644) // Write the buffer content to the wallet file
+	err = os.WriteFile(walletFilePath, content.Bytes(), 0o644) // Write the buffer content to the wallet file
 	if err != nil {
 		log.Panic(err)
 	}

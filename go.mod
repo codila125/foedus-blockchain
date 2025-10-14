@@ -5,6 +5,7 @@ go 1.25.1
 require (
 	github.com/dgraph-io/badger/v4 v4.8.0
 	github.com/mr-tron/base58 v1.2.0
+	github.com/vrecan/death/v3 v3.0.3
 )
 
 require (

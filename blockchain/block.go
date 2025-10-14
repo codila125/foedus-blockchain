@@ -5,23 +5,28 @@ import (
 	"bytes"
 	"encoding/gob"
 	"log"
+	"time"
 )
 
 type Block struct {
+	Timestamp    int64          // Timestamp of the block creation
 	Hash         []byte         // Hash of the block
 	Transactions []*Transaction // List of transactions included in the block
 	PrevHash     []byte         // Hash of the previous block
 	Nonce        int            // Nonce used for mining
+	Height       int            // Height of the block in the blockchain
 }
 
-func CreateBlock(txs []*Transaction, prevhash []byte) *Block {
+func CreateBlock(txs []*Transaction, prevhash []byte, height int) *Block {
 	/*
 		Creates a new block with the given transactions and previous block hash.
 	*/
 	block := &Block{
+		Timestamp:    time.Now().Unix(),
 		Transactions: txs,
 		PrevHash:     prevhash,
-		Nonce:        0, // Nonce is the number which will be found by Proof of Work
+		Nonce:        0,      // Nonce is the number which will be found by Proof of Work
+		Height:       height, // Height will be set when adding the block to the blockchain
 	}
 	pow := NewProof(block)   // Create a new Proof of Work for the block
 	nonce, hash := pow.Run() // Run the Proof of Work to find a valid nonce and hash
@@ -53,7 +58,7 @@ func Genesis(coinbase *Transaction) *Block {
 		Creates the genesis block with a coinbase transaction.
 		'coinbase' is the coinbase transaction that rewards the miner.
 	*/
-	return CreateBlock([]*Transaction{coinbase}, []byte{})
+	return CreateBlock([]*Transaction{coinbase}, []byte{}, 0)
 }
 
 func (b *Block) Serialize() []byte {
