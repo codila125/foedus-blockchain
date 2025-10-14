@@ -62,7 +62,8 @@ func (cli *CommandLine) createWallet(nodeId string) {
 	address := wallets.AddWallet()
 	wallets.SaveFile(nodeId)
 
-	fmt.Printf("New address is: %s\n", address)
+	log.Printf("[WALLET] New wallet created successfully")
+	fmt.Printf("New address: %s\n", address)
 }
 
 func (cli *CommandLine) printChain(nodeId string) {
@@ -99,16 +100,17 @@ func (cli *CommandLine) createBlockChain(address string, nodeId string) {
 		Also initializes the UTXO set for the new blockchain.
 	*/
 	if !wallet.ValidateAddress(address) { // Validate the provided address
-		log.Panic("Address is not valid")
+		log.Panic("[CLI] Invalid address provided")
 	}
 
+	log.Printf("[CLI] Creating new blockchain for address: %s", address)
 	chain := blockchain.NewBlockChain(address, nodeId) // Create a new blockchain with the genesis block
 	chain.Database.Close()                             // Close the database connection
 
 	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
 	UTXOSet.Reindex() // Rebuild the UTXO set from the blockchain
 
-	fmt.Println("Finished!")
+	log.Printf("[CLI] ✓ Blockchain created successfully")
 }
 
 func (cli *CommandLine) getBalance(address string, nodeId string) {
@@ -116,8 +118,10 @@ func (cli *CommandLine) getBalance(address string, nodeId string) {
 		Calculates and prints the balance of the specified address by summing its unspent transaction outputs (UTXOs).
 	*/
 	if !wallet.ValidateAddress(address) {
-		log.Panic("Address is not valid")
+		log.Panic("[CLI] Invalid address provided")
 	}
+
+	log.Printf("[CLI] Fetching balance for address: %s", address)
 
 	// Load the existing blockchain and rebuild the UTXO set
 	chain := blockchain.ContinueBlockChain(nodeId) // Load the existing blockchain
@@ -134,6 +138,8 @@ func (cli *CommandLine) getBalance(address string, nodeId string) {
 	for _, out := range UTXOs {
 		balance += out.Value
 	}
+
+	log.Printf("[CLI] Balance retrieved: %d", balance)
 	fmt.Printf("Balance of %s: %d\n", address, balance)
 }
 
@@ -144,11 +150,13 @@ func (cli *CommandLine) send(from, to string, amount int, nodeID string, mineNow
 	*/
 	// Validate the provided addresses
 	if !wallet.ValidateAddress(from) {
-		log.Panic("from Address is not valid")
+		log.Panic("[CLI] Invalid sender address")
 	}
 	if !wallet.ValidateAddress(to) {
-		log.Panic("to Address is not valid")
+		log.Panic("[CLI] Invalid recipient address")
 	}
+
+	log.Printf("[CLI] Initiating transaction: %d from %s to %s", amount, from, to)
 
 	// Load the existing blockchain and UTXO set
 	chain := blockchain.ContinueBlockChain(nodeID)
@@ -165,30 +173,31 @@ func (cli *CommandLine) send(from, to string, amount int, nodeID string, mineNow
 	// Create a new transaction from the sender to the recipient
 	tx := blockchain.NewTransaction(&wallet, to, amount, &UTXOSet)
 	if mineNow {
+		log.Printf("[CLI] Mining transaction locally")
 		cbTx := blockchain.CoinbaseTx(from, "")    // Create a coinbase transaction for the sender
 		txs := []*blockchain.Transaction{cbTx, tx} // Include the coinbase transaction in the new block
 		newBlock := chain.MineBlock(txs)           // Mine a new block with the transactions
-		fmt.Println("New block is mined!")
-		UTXOSet.Update(newBlock) // Update the UTXO set with the new block
+		UTXOSet.Update(newBlock)                   // Update the UTXO set with the new block
+		log.Printf("[CLI] ✓ Transaction mined in block %x", newBlock.Hash)
 	} else {
+		log.Printf("[CLI] Sending transaction to network")
 		network.SendTx(network.KnownNodes[0], tx) // Send the transaction to a known node in the network
-		fmt.Println("Transaction is sent!")
+		log.Printf("[CLI] ✓ Transaction sent to network")
 	}
-
-	fmt.Println("Success!")
 }
 
 func (cli *CommandLine) reindexUTXO(nodeID string) {
 	/*
 		Rebuilds the UTXO set from the current state of the blockchain.
 	*/
+	log.Printf("[CLI] Starting UTXO reindex operation")
 	chain := blockchain.ContinueBlockChain(nodeID) // Load the existing blockchain
 	defer chain.Database.Close()
 	UTXOSet := blockchain.UTXOSet{Blockchain: chain} // Create a UTXO set instance
 	UTXOSet.Reindex()                                // Rebuild the UTXO set
 
 	count := UTXOSet.CountTransactions() // Count the number of transactions in the UTXO set
-	fmt.Printf("Done! There are %d transactions in the UTXO set.\n", count)
+	log.Printf("[CLI] ✓ UTXO reindex complete - %d transaction(s) in set", count)
 }
 
 func (cli *CommandLine) startNode(nodeID string, minerAddress string) {
@@ -196,13 +205,9 @@ func (cli *CommandLine) startNode(nodeID string, minerAddress string) {
 		Starts a new node in the blockchain network.
 		If a miner address is provided, the node will also mine new blocks and send rewards to that address.
 	*/
-	fmt.Printf("Starting Node %s\n", nodeID)
-
 	if len(minerAddress) > 0 {
-		if wallet.ValidateAddress(minerAddress) {
-			fmt.Println("Mining is on. Address to receive rewards: ", minerAddress)
-		} else {
-			log.Panic("Wrong miner address!")
+		if !wallet.ValidateAddress(minerAddress) {
+			log.Panic("[CLI] Invalid miner address provided")
 		}
 	}
 	network.StartServer(nodeID, minerAddress)

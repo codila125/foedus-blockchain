@@ -20,6 +20,7 @@ func (u *UTXOSet) Reindex() {
 		by deleting the previous UTXO set and scanning the entire
 		blockchain to find all unspent transaction outputs.
 	*/
+	log.Printf("[UTXO] Starting UTXO set reindexing")
 	db := u.Blockchain.Database // Get the database from the blockchain
 
 	u.DeleteByPrefix(UTXOPrefix) // Delete existing UTXO entries with the specified prefix
@@ -40,6 +41,9 @@ func (u *UTXOSet) Reindex() {
 		return nil
 	})
 	Handle(err)
+
+	count := u.CountTransactions()
+	log.Printf("[UTXO] UTXO set reindexed successfully - %d transaction(s) in set", count)
 }
 
 func (u *UTXOSet) Update(block *Block) {
@@ -47,6 +51,7 @@ func (u *UTXOSet) Update(block *Block) {
 		Updates the UTXO set with the transactions from the given block.
 		Removes spent outputs and adds new outputs from the block's transactions.
 	*/
+	log.Printf("[UTXO] Updating UTXO set with block %x", block.Hash)
 	db := u.Blockchain.Database
 
 	err := db.Update(func(txn *badger.Txn) error {
@@ -105,6 +110,7 @@ func (u *UTXOSet) Update(block *Block) {
 		return nil
 	})
 	Handle(err)
+	log.Printf("[UTXO] UTXO set updated successfully")
 }
 
 func (u *UTXOSet) DeleteByPrefix(prefix []byte) {

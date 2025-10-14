@@ -26,7 +26,7 @@ const (
 
 var (
 	nodeAddress     string                                    // Address of main node
-	mineAddress    string                                    // Address of node used for mining
+	mineAddress     string                                    // Address of node used for mining
 	KnownNodes      = []string{"localhost:3000"}              // List of known nodes in the network, already contains the main node
 	blocksInTransit = [][]byte{}                              // List of block hashes that are in transit (being sent or received)
 	memoryPool      = make(map[string]blockchain.Transaction) // Pool of transactions in memory
@@ -116,7 +116,7 @@ func SendData(addr string, data []byte) {
 	conn, err := net.Dial(protocol, addr) // Establish a connection to the specified address
 	// If connection fails, remove the node from KnownNodes
 	if err != nil {
-		fmt.Printf("%s is not available\n", addr)
+		log.Printf("[NETWORK] Node %s is unavailable, removing from known nodes", addr)
 		var updatedNodes []string
 
 		for _, node := range KnownNodes {
@@ -145,7 +145,7 @@ func SendAddr(address string) {
 	payload := GobEncode(nodes)
 	req := append(CommandToBytes("addr"), payload...)
 
-	log.Printf("--> Sending addresses to %s", address)
+	log.Printf("[NETWORK] → Sending %d address(es) to %s", len(nodes.Addrlist), address)
 	SendData(address, req)
 }
 
@@ -157,7 +157,7 @@ func SendBlock(addr string, b *blockchain.Block) {
 	payload := GobEncode(data)
 	req := append(CommandToBytes("block"), payload...)
 
-	log.Printf("--> Sending block %x to %s", b.Hash, addr)
+	log.Printf("[NETWORK] → Sending block %x (height: %d) to %s", b.Hash, b.Height, addr)
 	SendData(addr, req)
 }
 
@@ -169,7 +169,7 @@ func SendInv(address, kind string, items [][]byte) {
 	payload := GobEncode(inventory)
 	req := append(CommandToBytes("inv"), payload...)
 
-	log.Printf("--> Sending inventory of %d %s to %s", len(items), kind, address)
+	log.Printf("[NETWORK] → Sending inventory of %d %s to %s", len(items), kind, address)
 	SendData(address, req)
 }
 
@@ -181,7 +181,7 @@ func SendTx(addr string, tnx *blockchain.Transaction) {
 	payload := GobEncode(data)
 	req := append(CommandToBytes("tx"), payload...)
 
-	log.Printf("--> Sending transaction %x to %s", tnx.ID, addr)
+	log.Printf("[NETWORK] → Sending transaction %x to %s", tnx.ID, addr)
 	SendData(addr, req)
 }
 
@@ -194,7 +194,7 @@ func SendVersion(addr string, chain *blockchain.BlockChain) {
 
 	req := append(CommandToBytes("version"), payload...)
 
-	log.Printf("--> Sending version to %s", addr)
+	log.Printf("[NETWORK] → Sending version (height: %d) to %s", bestHeight, addr)
 	SendData(addr, req)
 }
 
@@ -205,7 +205,7 @@ func SendGetBlocks(addr string) {
 	payload := GobEncode(GetBlocks{nodeAddress})
 	req := append(CommandToBytes("getblocks"), payload...)
 
-	log.Printf("--> Sending getblocks to %s", addr)
+	log.Printf("[NETWORK] → Requesting blocks from %s", addr)
 	SendData(addr, req)
 }
 
@@ -216,7 +216,7 @@ func SendGetData(addr string, kind string, id []byte) {
 	payload := GobEncode(GetData{nodeAddress, kind, id})
 	req := append(CommandToBytes("getdata"), payload...)
 
-	log.Printf("--> Sending getdata for %s %x to %s", kind, id, addr)
+	log.Printf("[NETWORK] → Requesting %s %x from %s", kind, id, addr)
 	SendData(addr, req)
 }
 
@@ -235,7 +235,7 @@ func HandleAddr(request []byte) {
 	}
 
 	KnownNodes = append(KnownNodes, payload.Addrlist...)
-	log.Printf("Received addresses, now have %d known nodes", len(KnownNodes))
+	log.Printf("[NETWORK] ← Received %d address(es), total known nodes: %d", len(payload.Addrlist), len(KnownNodes))
 	RequestBlocks()
 }
 
@@ -265,22 +265,22 @@ func HandleBlock(request []byte, chain *blockchain.BlockChain) {
 	blockData := payload.Block
 	block := blockchain.Deserialize(blockData)
 
-	log.Printf("Received a new block from %s!", payload.AddrFrom)
+	log.Printf("[NETWORK] ← Received block %x (height: %d) from %s", block.Hash, block.Height, payload.AddrFrom)
 
 	err = chain.AddBlock(block)
 	if err != nil {
-		log.Printf("Could not add block: %v", err)
+		log.Printf("[NETWORK] Failed to add block %x: %v", block.Hash, err)
 		return
 	}
-
-	log.Printf("Added block %x", block.Hash)
 
 	// If there are more blocks in transit, request the next one
 	if len(blocksInTransit) > 0 {
 		blockHash := blocksInTransit[0]
+		log.Printf("[NETWORK] %d block(s) remaining in transit, requesting next", len(blocksInTransit))
 		SendGetData(payload.AddrFrom, "block", blockHash)
 		blocksInTransit = blocksInTransit[1:]
 	} else {
+		log.Printf("[NETWORK] All blocks received, reindexing UTXO set")
 		UTXO := blockchain.UTXOSet{Blockchain: chain}
 		UTXO.Reindex()
 	}
@@ -353,21 +353,21 @@ func HandleVersion(request []byte, chain *blockchain.BlockChain) {
 	}
 
 	bestHeight := chain.GetBestHeight() // Get the best height of the local blockchain
-	log.Printf(">>> VERSION received from %s (their height: %d, our height: %d)\n", payload.AddrFrom, payload.BestHeight, bestHeight)
+	log.Printf("[NETWORK] ← Received version from %s (peer height: %d, local height: %d)", payload.AddrFrom, payload.BestHeight, bestHeight)
 
 	if bestHeight < payload.BestHeight { // If the local blockchain is behind
-		log.Printf(">>> We are behind! Requesting blocks from %s\n", payload.AddrFrom)
+		log.Printf("[NETWORK] Local blockchain is behind by %d block(s), requesting blocks", payload.BestHeight-bestHeight)
 		SendGetBlocks(payload.AddrFrom) // Request blocks from the sender
 	} else if bestHeight > payload.BestHeight { // If the local blockchain is ahead
-		log.Printf(">>> We are ahead! Sending blocks to %s\n", payload.AddrFrom)
+		log.Printf("[NETWORK] Local blockchain is ahead by %d block(s), sending version", bestHeight-payload.BestHeight)
 		SendVersion(payload.AddrFrom, chain) // Send the local version to the sender
 	} else {
-		log.Printf(">>> We are up-to-date with %s\n", payload.AddrFrom)
+		log.Printf("[NETWORK] Blockchains are synchronized with %s", payload.AddrFrom)
 	}
 
 	if !NodeIsKnown(payload.AddrFrom) { // If the sender is not in the list of known nodes
 		KnownNodes = append(KnownNodes, payload.AddrFrom) // Add the sender to the list of known nodes
-		log.Printf(">>> Added %s to known nodes\n", payload.AddrFrom)
+		log.Printf("[NETWORK] Added %s to known nodes (total: %d)", payload.AddrFrom, len(KnownNodes))
 	}
 }
 
@@ -401,17 +401,19 @@ func HandleTx(request []byte, chain *blockchain.BlockChain) {
 	tx := blockchain.DeserializeTransaction(txData)
 	memoryPool[hex.EncodeToString(tx.ID)] = tx
 
-	log.Printf("Received transaction %x from %s", tx.ID, payload.AddrFrom)
+	log.Printf("[NETWORK] ← Received transaction %x from %s (mempool size: %d)", tx.ID, payload.AddrFrom, len(memoryPool))
 
 	if nodeAddress == KnownNodes[0] {
 		for _, node := range KnownNodes {
 			if node != nodeAddress && node != payload.AddrFrom {
 				SendInv(node, "tx", [][]byte{tx.ID}) // Notify other nodes about the new transaction
+				log.Printf("[NETWORK] Relaying transaction %x to %s", tx.ID, node)
 			}
 		}
 	}
 
 	if len(memoryPool) >= 1 && len(mineAddress) > 0 {
+		log.Printf("[MINING] Mempool threshold reached, initiating mining")
 		MineTx(chain) // If the node is a miner and has enough transactions, mine a new block
 	}
 }
@@ -420,34 +422,37 @@ func MineTx(chain *blockchain.BlockChain) {
 	/*
 		Handles the mining of transactions into a new block.
 	*/
-    var txs []*blockchain.Transaction
+	var txs []*blockchain.Transaction
 
-    // Make a slice of transaction IDs to ensure consistent processing
-    var txIDs []string
-    for id := range memoryPool {
-        txIDs = append(txIDs, id)
-    }
+	log.Printf("[MINING] Processing %d transaction(s) from mempool", len(memoryPool))
 
-    // Process transactions in a deterministic order
-    for _, id := range txIDs {
-        // Get the transaction from memory pool
-        tx := memoryPool[id]
-        fmt.Printf("Verifying tx: %x\n", tx.ID)
-        
-        if chain.VerifyTransaction(&tx, memoryPool) {
-            // Store a persistent copy of the verified transaction
-            verifiedTx := tx // Make a copy
-            txs = append(txs, &verifiedTx)
-            log.Printf("Transaction %x passed verification", tx.ID)
-        } else {
-            log.Printf("Transaction %x failed verification - INVALID", tx.ID)
-        }
-    }
+	// Make a slice of transaction IDs to ensure consistent processing
+	var txIDs []string
+	for id := range memoryPool {
+		txIDs = append(txIDs, id)
+	}
 
-    if len(txs) == 0 {
-        log.Println("All transactions are invalid")
-        return
-    }
+	// Process transactions in a deterministic order
+	for _, id := range txIDs {
+		// Get the transaction from memory pool
+		tx := memoryPool[id]
+
+		if chain.VerifyTransaction(&tx, memoryPool) {
+			// Store a persistent copy of the verified transaction
+			verifiedTx := tx // Make a copy
+			txs = append(txs, &verifiedTx)
+			log.Printf("[MINING] ✓ Transaction %x verified", tx.ID)
+		} else {
+			log.Printf("[MINING] ✗ Transaction %x rejected (invalid)", tx.ID)
+		}
+	}
+
+	if len(txs) == 0 {
+		log.Printf("[MINING] No valid transactions to mine")
+		return
+	}
+
+	log.Printf("[MINING] Mining block with %d valid transaction(s)", len(txs))
 
 	// Mine a new block with the transactions.
 	cbTx := blockchain.CoinbaseTx(mineAddress, "")
@@ -457,13 +462,15 @@ func MineTx(chain *blockchain.BlockChain) {
 	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
 	UTXOSet.Reindex()
 
-	log.Println("New block mined")
+	log.Printf("[MINING] ✓ Block mined successfully - Hash: %x, Transactions: %d", newBlock.Hash, len(txs))
 
 	// Clear the memory pool.
 	for _, tx := range txs {
 		txID := hex.EncodeToString(tx.ID)
 		delete(memoryPool, txID) // Remove the transaction from the memory pool
 	}
+
+	log.Printf("[MINING] Mempool cleared, %d transaction(s) remaining", len(memoryPool))
 
 	// Notify other nodes about the new block
 	for _, node := range KnownNodes {
@@ -473,6 +480,7 @@ func MineTx(chain *blockchain.BlockChain) {
 	}
 
 	if len(memoryPool) > 0 {
+		log.Printf("[MINING] Additional transactions in mempool, continuing mining")
 		MineTx(chain) // If there are still transactions in the memory pool, mine another block
 	}
 }
@@ -491,23 +499,24 @@ func HandleInv(request []byte, chain *blockchain.BlockChain) {
 		log.Panic(err)
 	}
 
-	log.Printf("Received inventory with %d %s from %s", len(payload.Items), payload.Type, payload.AddrFrom)
+	log.Printf("[NETWORK] ← Received inventory with %d %s from %s", len(payload.Items), payload.Type, payload.AddrFrom)
 
 	if payload.Type == "block" {
 		blocksInTransit = payload.Items
 		blockHash := payload.Items[0] // Get the first block hash in the inventory
-		log.Printf("Requesting block %x\n", blockHash)
+		log.Printf("[NETWORK] Requesting first block %x (total: %d)", blockHash, len(blocksInTransit))
 		SendGetData(payload.AddrFrom, "block", blockHash) // Request the block from the sender
 
 		blocksInTransit = blocksInTransit[1:] // Remove the requested block hash from the list
-		log.Printf(">>> Blocks remaining in transit: %d\n", len(blocksInTransit))
 	}
 
 	if payload.Type == "tx" {
 		txID := payload.Items[0]                            // Get the first transaction ID in the inventory
 		if memoryPool[hex.EncodeToString(txID)].ID == nil { // If the transaction is not already in the memory pool
-			log.Printf("Requesting transaction %x\n", txID)
+			log.Printf("[NETWORK] Requesting transaction %x", txID)
 			SendGetData(payload.AddrFrom, "tx", txID) // Request the transaction from the sender
+		} else {
+			log.Printf("[NETWORK] Transaction %x already in mempool, skipping", txID)
 		}
 	}
 }
@@ -526,7 +535,7 @@ func HandleConnection(conn net.Conn, chain *blockchain.BlockChain) {
 		return
 	}
 	command := BytesToCommand(req[:commandLength])
-	log.Printf("<-- Received %s command", command)
+	log.Printf("[NETWORK] ← Received '%s' command", command)
 
 	switch command {
 	case "addr":
@@ -544,7 +553,7 @@ func HandleConnection(conn net.Conn, chain *blockchain.BlockChain) {
 	case "version":
 		HandleVersion(req, chain)
 	default:
-		log.Println("Unknown command")
+		log.Printf("[NETWORK] Unknown command received: %s", command)
 	}
 }
 
@@ -559,7 +568,9 @@ func CloseDB(chain *blockchain.BlockChain) {
 	d.WaitForDeathWithFunc(func() {
 		defer os.Exit(1)       // Exit with a non-zero status to indicate termination
 		defer runtime.Goexit() // Ensure all goroutines are terminated
+		log.Printf("[SYSTEM] Shutting down node, closing database...")
 		chain.Database.Close() // Close the blockchain database
+		log.Printf("[SYSTEM] Database closed successfully")
 	})
 }
 
@@ -569,6 +580,15 @@ func StartServer(nodeID, minerAddress string) {
 	*/
 	nodeAddress = fmt.Sprintf("localhost:%s", nodeID)
 	mineAddress = minerAddress
+
+	log.Printf("[SYSTEM] ═══════════════════════════════════════════════════")
+	log.Printf("[SYSTEM] Starting blockchain node: %s", nodeAddress)
+	if len(minerAddress) > 0 {
+		log.Printf("[SYSTEM] Mining enabled - Rewards to: %s", minerAddress)
+	} else {
+		log.Printf("[SYSTEM] Mining disabled - Running as network node")
+	}
+	log.Printf("[SYSTEM] ═══════════════════════════════════════════════════")
 
 	ln, err := net.Listen(protocol, nodeAddress)
 	if err != nil {
@@ -581,8 +601,14 @@ func StartServer(nodeID, minerAddress string) {
 	go CloseDB(chain)
 
 	if nodeAddress != KnownNodes[0] {
+		log.Printf("[NETWORK] Connecting to central node: %s", KnownNodes[0])
 		SendVersion(KnownNodes[0], chain)
+	} else {
+		log.Printf("[NETWORK] Running as central node")
 	}
+
+	log.Printf("[NETWORK] Node ready - Listening for connections...")
+
 	for {
 		conn, err := ln.Accept()
 		if err != nil {

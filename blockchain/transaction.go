@@ -101,7 +101,7 @@ func NewTransaction(w *wallet.Wallet, to string, amount int, UTXO *UTXOSet) *Tra
 
 	// Check if the accumulated amount is less than the requested amount
 	if acc < amount {
-		log.Panic("ERROR: Not enough funds")
+		log.Panicf("[TRANSACTION] Insufficient funds - Required: %d, Available: %d", amount, acc)
 	}
 
 	for txid, outs := range validOutputs {
@@ -128,6 +128,7 @@ func NewTransaction(w *wallet.Wallet, to string, amount int, UTXO *UTXOSet) *Tra
 	Handle(err)
 	UTXO.Blockchain.SignTransaction(&tx, *privatekey)
 
+	log.Printf("[TRANSACTION] Transaction created - ID: %x, Amount: %d", tx.ID, amount)
 	return &tx
 }
 
@@ -138,7 +139,7 @@ func (tx *Transaction) Sign(privKey ecdsa.PrivateKey, prevTXs map[string]Transac
 
 	for _, in := range tx.Inputs {
 		if prevTXs[hex.EncodeToString(in.ID)].ID == nil {
-			log.Panic("ERROR: Previous transaction is not correct")
+			log.Panicf("[TRANSACTION] Signing failed - Invalid parent transaction: %x", in.ID)
 		}
 	}
 
@@ -187,7 +188,7 @@ func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
 
 	for _, in := range tx.Inputs {
 		if prevTXs[hex.EncodeToString(in.ID)].ID == nil {
-			log.Panic("Previous transaction not correct")
+			log.Panicf("[TRANSACTION] Verification failed - Invalid parent transaction: %x", in.ID)
 		}
 	}
 
@@ -259,4 +260,3 @@ func DeserializeTransaction(data []byte) Transaction {
 
 	return transaction
 }
-

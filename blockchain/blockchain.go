@@ -52,9 +52,11 @@ func NewBlockChain(address string, nodeId string) *BlockChain {
 	// Ensure a blockchain does not already exist
 	path := fmt.Sprintf(DbPath, nodeId)
 	if DBExists(path) {
-		fmt.Println("Blockchain already exists")
+		log.Printf("[BLOCKCHAIN] Blockchain already exists for node %s", nodeId)
 		runtime.Goexit()
 	}
+
+	log.Printf("[BLOCKCHAIN] Initializing new blockchain for node %s", nodeId)
 
 	if err := os.MkdirAll(path, 0o755); err != nil {
 		log.Panic(err)
@@ -68,7 +70,7 @@ func NewBlockChain(address string, nodeId string) *BlockChain {
 	err = db.Update(func(txn *badger.Txn) error {
 		cbtx := CoinbaseTx(address, genesisData) // Create the coinbase transaction for the genesis block
 		genesis := Genesis(cbtx)                 // Create the genesis block
-		fmt.Println("Genesis created")
+		log.Printf("[BLOCKCHAIN] Genesis block created - Hash: %x", genesis.Hash)
 		err := txn.Set(genesis.Hash, genesis.Serialize()) // Store the genesis block in the database
 		Handle(err)
 		err = txn.Set([]byte("lh"), genesis.Hash) // Store the last hash pointer because it helps to find the last block
@@ -81,6 +83,7 @@ func NewBlockChain(address string, nodeId string) *BlockChain {
 	Handle(err)
 
 	blockchain := BlockChain{lastHash, db}
+	log.Printf("[BLOCKCHAIN] Blockchain initialized successfully for node %s", nodeId)
 	return &blockchain
 }
 
@@ -91,9 +94,11 @@ func ContinueBlockChain(nodeId string) *BlockChain {
 	*/
 	path := fmt.Sprintf(DbPath, nodeId)
 	if !DBExists(path) {
-		fmt.Println("Blockchain does not exist")
+		log.Printf("[BLOCKCHAIN] No existing blockchain found for node %s", nodeId)
 		runtime.Goexit()
 	}
+
+	log.Printf("[BLOCKCHAIN] Loading existing blockchain for node %s", nodeId)
 
 	var lastHash []byte
 
@@ -113,6 +118,7 @@ func ContinueBlockChain(nodeId string) *BlockChain {
 	Handle(err)
 
 	chain := BlockChain{lastHash, db}
+	log.Printf("[BLOCKCHAIN] Blockchain loaded successfully with height %d", chain.GetBestHeight())
 	return &chain
 }
 
@@ -125,16 +131,18 @@ func (blockchain *BlockChain) MineBlock(transactions []*Transaction) *Block {
 	var lastHash []byte
 	var lastHeight int
 
-    txMap := make(map[string]Transaction)
-    for _, tx := range transactions {
-        txMap[hex.EncodeToString(tx.ID)] = *tx
-    }
+	log.Printf("[MINING] Starting block mining with %d transaction(s)", len(transactions))
 
-    for _, tx := range transactions {
-        if !blockchain.VerifyTransaction(tx, txMap) {
-            log.Panic("Invalid Transaction")
-        }
-    }
+	txMap := make(map[string]Transaction)
+	for _, tx := range transactions {
+		txMap[hex.EncodeToString(tx.ID)] = *tx
+	}
+
+	for _, tx := range transactions {
+		if !blockchain.VerifyTransaction(tx, txMap) {
+			log.Panicf("[MINING] Invalid transaction detected: %x", tx.ID)
+		}
+	}
 
 	// Get the last hash from the database
 	err := blockchain.Database.View(func(txn *badger.Txn) error {
@@ -167,6 +175,12 @@ func (blockchain *BlockChain) MineBlock(transactions []*Transaction) *Block {
 	})
 
 	Handle(err)
+
+	log.Printf("[MINING] Block mined successfully - Hash: %x, Height: %d", newBlock.Hash, newBlock.Height)
+
+	utxoSet := UTXOSet{blockchain}
+	utxoSet.Update(newBlock)
+
 	return newBlock
 }
 
@@ -176,7 +190,7 @@ func (chain *BlockChain) AddBlock(block *Block) error {
 		'block' is a pointer to the Block instance to be added.
 		Returns an error if any operation fails, otherwise returns nil.
 	*/
-	
+
 	err := chain.Database.Update(func(txn *badger.Txn) error {
 		// Check if block already exists
 		if _, err := txn.Get(block.Hash); err == nil {
@@ -213,6 +227,9 @@ func (chain *BlockChain) AddBlock(block *Block) error {
 				return fmt.Errorf("could not update last hash: %w", err)
 			}
 			chain.LastHash = block.Hash
+			log.Printf("[BLOCKCHAIN] Block added and chain updated - Hash: %x, Height: %d", block.Hash, block.Height)
+		} else {
+			log.Printf("[BLOCKCHAIN] Block added to database - Hash: %x, Height: %d", block.Hash, block.Height)
 		}
 
 		return nil
@@ -376,34 +393,38 @@ func (blockchain *BlockChain) SignTransaction(tx *Transaction, privKey ecdsa.Pri
 }
 
 func (blockchain *BlockChain) VerifyTransaction(tx *Transaction, txMap map[string]Transaction) bool {
-    /*
-        Verifies the signatures of a transaction.
-        'tx' is the transaction to be verified.
-        'txMap' is a map of other transactions in the same block/pool.
-        Returns true if the transaction is valid, false otherwise.
-    */
-    if tx.IsCoinbase() {
-        return true
-    }
-    prevTXs := make(map[string]Transaction)
+	/*
+	   Verifies the signatures of a transaction.
+	   'tx' is the transaction to be verified.
+	   'txMap' is a map of other transactions in the same block/pool.
+	   Returns true if the transaction is valid, false otherwise.
+	*/
+	if tx.IsCoinbase() {
+		return true
+	}
+	prevTXs := make(map[string]Transaction)
 
+	for _, in := range tx.Inputs {
+		// First, check if the previous transaction is in the current pool of transactions.
+		if prevTx, ok := txMap[hex.EncodeToString(in.ID)]; ok {
+			prevTXs[hex.EncodeToString(prevTx.ID)] = prevTx
+		} else {
+			// If not in the pool, search the blockchain.
+			prevTX, err := blockchain.FindTransaction(in.ID)
+			if err != nil {
+				log.Printf("[VERIFY] Transaction verification failed - Parent transaction %x not found", in.ID)
+				return false
+			}
+			prevTXs[hex.EncodeToString(prevTX.ID)] = prevTX
+		}
+	}
 
-    for _, in := range tx.Inputs {
-        // First, check if the previous transaction is in the current pool of transactions.
-        if prevTx, ok := txMap[hex.EncodeToString(in.ID)]; ok {
-            prevTXs[hex.EncodeToString(prevTx.ID)] = prevTx
-        } else {
-            // If not in the pool, search the blockchain.
-            prevTX, err := blockchain.FindTransaction(in.ID)
-            if err != nil {
-                log.Printf("VerifyTransaction Error: Could not find transaction %x\n", in.ID)
-                return false
-            }
-            prevTXs[hex.EncodeToString(prevTX.ID)] = prevTX
-        }
-    }
+	if !tx.Verify(prevTXs) {
+		log.Printf("[VERIFY] Transaction %x signature verification failed", tx.ID)
+		return false
+	}
 
-    return tx.Verify(prevTXs)
+	return true
 }
 
 func retry(dir string, originalOpts badger.Options) (*badger.DB, error) {
@@ -416,6 +437,7 @@ func retry(dir string, originalOpts badger.Options) (*badger.DB, error) {
 	if err := os.Remove(lockPath); err != nil { // Remove the lock file
 		return nil, err
 	}
+	log.Printf("[DATABASE] Retrying database connection after removing lock file")
 	retryOpts := originalOpts  // Retry opening the database with the original options
 	retryOpts.ReadOnly = false // Ensure ReadOnly is false for retry
 	return badger.Open(retryOpts)
@@ -428,10 +450,12 @@ func openDB(dir string, options badger.Options) (*badger.DB, error) {
 	*/
 	if db, err := badger.Open(options); err != nil {
 		if strings.Contains(err.Error(), "LOCK") { // Check if the error is related to a lock file
+			log.Printf("[DATABASE] Database locked, attempting recovery")
 			if db, err := retry(dir, options); err == nil {
+				log.Printf("[DATABASE] Database opened successfully after retry")
 				return db, nil
 			}
-			log.Println("Could not open DB after retrying")
+			log.Printf("[DATABASE] Failed to open database after retry")
 		}
 		return nil, err
 	} else {
