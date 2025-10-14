@@ -4,14 +4,13 @@ package cli
 import (
 	"flag"
 	"fmt"
+	"go_blockchain/blockchain"
+	"go_blockchain/network"
+	"go_blockchain/wallet"
 	"log"
 	"os"
 	"runtime"
 	"strconv"
-
-	"go_blockchain/blockchain"
-	"go_blockchain/network"
-	"go_blockchain/wallet"
 )
 
 type CommandLine struct{}
@@ -42,11 +41,11 @@ func (cli *CommandLine) validateArgs() {
 	}
 }
 
-func (cli *CommandLine) listAddresses(nodeId string) {
+func (cli *CommandLine) listAddresses(nodeID string) {
 	/*
 		Lists all wallet addresses stored in the wallet file.
 	*/
-	wallets, _ := wallet.CreateWallets(nodeId)
+	wallets, _ := wallet.CreateWallets(nodeID)
 	addresses := wallets.GetAllAddresses()
 
 	for _, address := range addresses {
@@ -54,23 +53,23 @@ func (cli *CommandLine) listAddresses(nodeId string) {
 	}
 }
 
-func (cli *CommandLine) createWallet(nodeId string) {
+func (cli *CommandLine) createWallet(nodeID string) {
 	/*
 		Creates a new wallet, saves it to the wallet file, and prints the new address.
 	*/
-	wallets, _ := wallet.CreateWallets(nodeId)
+	wallets, _ := wallet.CreateWallets(nodeID)
 	address := wallets.AddWallet()
-	wallets.SaveFile(nodeId)
+	wallets.SaveFile(nodeID)
 
 	log.Printf("[WALLET] New wallet created successfully")
 	fmt.Printf("New address: %s\n", address)
 }
 
-func (cli *CommandLine) printChain(nodeId string) {
+func (cli *CommandLine) printChain(nodeID string) {
 	/*
 		Prints all the blocks in the blockchain along with their details.
 	*/
-	chain := blockchain.ContinueBlockChain(nodeId) // Load the existing blockchain
+	chain := blockchain.ContinueBlockChain(nodeID) // Load the existing blockchain
 	defer chain.Database.Close()
 	iter := chain.Iterator()
 
@@ -94,7 +93,7 @@ func (cli *CommandLine) printChain(nodeId string) {
 	}
 }
 
-func (cli *CommandLine) createBlockChain(address string, nodeId string) {
+func (cli *CommandLine) createBlockChain(address string, nodeID string) {
 	/*
 		Creates a new blockchain and sends the genesis block reward to the specified address.
 		Also initializes the UTXO set for the new blockchain.
@@ -104,7 +103,7 @@ func (cli *CommandLine) createBlockChain(address string, nodeId string) {
 	}
 
 	log.Printf("[CLI] Creating new blockchain for address: %s", address)
-	chain := blockchain.NewBlockChain(address, nodeId) // Create a new blockchain with the genesis block
+	chain := blockchain.NewBlockChain(address, nodeID) // Create a new blockchain with the genesis block
 	chain.Database.Close()                             // Close the database connection
 
 	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
@@ -113,7 +112,7 @@ func (cli *CommandLine) createBlockChain(address string, nodeId string) {
 	log.Printf("[CLI] ✓ Blockchain created successfully")
 }
 
-func (cli *CommandLine) getBalance(address string, nodeId string) {
+func (cli *CommandLine) getBalance(address string, nodeID string) {
 	/*
 		Calculates and prints the balance of the specified address by summing its unspent transaction outputs (UTXOs).
 	*/
@@ -124,7 +123,7 @@ func (cli *CommandLine) getBalance(address string, nodeId string) {
 	log.Printf("[CLI] Fetching balance for address: %s", address)
 
 	// Load the existing blockchain and rebuild the UTXO set
-	chain := blockchain.ContinueBlockChain(nodeId) // Load the existing blockchain
+	chain := blockchain.ContinueBlockChain(nodeID) // Load the existing blockchain
 	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
 	UTXOSet.Reindex() // Rebuild the UTXO set
 	defer chain.Database.Close()

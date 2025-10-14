@@ -6,14 +6,14 @@ import (
 	"encoding/gob"
 	"encoding/hex"
 	"fmt"
+	"go_blockchain/blockchain"
 	"io"
 	"log"
 	"net"
 	"os"
 	"runtime"
+	"slices"
 	"syscall"
-
-	"go_blockchain/blockchain"
 
 	"github.com/vrecan/death/v3"
 )
@@ -375,10 +375,8 @@ func NodeIsKnown(addr string) bool {
 	/*
 		Checks if a node address is already in the list of known nodes.
 	*/
-	for _, node := range KnownNodes {
-		if node == addr {
-			return true
-		}
+	if slices.Contains(KnownNodes, addr) {
+		return true
 	}
 	return false
 }

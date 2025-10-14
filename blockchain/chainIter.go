@@ -35,4 +35,3 @@ func (iter *BlockChainIterator) Next() *Block {
 
 	return block
 }
-

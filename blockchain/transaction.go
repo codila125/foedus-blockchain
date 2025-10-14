@@ -9,11 +9,10 @@ import (
 	"encoding/gob"
 	"encoding/hex"
 	"fmt"
+	"go_blockchain/wallet"
 	"log"
 	"math/big"
 	"strings"
-
-	"go_blockchain/wallet"
 )
 
 type Transaction struct {
@@ -115,7 +114,7 @@ func NewTransaction(w *wallet.Wallet, to string, amount int, UTXO *UTXOSet) *Tra
 		}
 	}
 
-	from := fmt.Sprintf("%s", w.Address())              // Get the sender's address from the wallet
+	from := string(w.Address())                         // Get the sender's address from the wallet
 	outputs = append(outputs, *NewTxOutput(amount, to)) // Create the output to the recipient
 
 	if acc > amount {
@@ -145,10 +144,10 @@ func (tx *Transaction) Sign(privKey ecdsa.PrivateKey, prevTXs map[string]Transac
 
 	txCopy := tx.TrimmedCopy()
 
-	for inId, in := range txCopy.Inputs {
+	for inID, in := range txCopy.Inputs {
 		prevTX := prevTXs[hex.EncodeToString(in.ID)]
-		txCopy.Inputs[inId].Signature = nil
-		txCopy.Inputs[inId].PubKey = prevTX.Outputs[in.Out].PubKeyHash
+		txCopy.Inputs[inID].Signature = nil
+		txCopy.Inputs[inID].PubKey = prevTX.Outputs[in.Out].PubKeyHash
 
 		dataToSign := fmt.Sprintf("%x\n", txCopy)
 
@@ -156,8 +155,8 @@ func (tx *Transaction) Sign(privKey ecdsa.PrivateKey, prevTXs map[string]Transac
 		Handle(err)
 		signature := append(r.Bytes(), s.Bytes()...)
 
-		tx.Inputs[inId].Signature = signature
-		txCopy.Inputs[inId].PubKey = nil
+		tx.Inputs[inID].Signature = signature
+		txCopy.Inputs[inID].PubKey = nil
 	}
 }
 
@@ -195,10 +194,10 @@ func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
 	txCopy := tx.TrimmedCopy()
 	curve := elliptic.P256()
 
-	for inId, in := range tx.Inputs {
+	for inID, in := range tx.Inputs {
 		prevTx := prevTXs[hex.EncodeToString(in.ID)]
-		txCopy.Inputs[inId].Signature = nil
-		txCopy.Inputs[inId].PubKey = prevTx.Outputs[in.Out].PubKeyHash
+		txCopy.Inputs[inID].Signature = nil
+		txCopy.Inputs[inID].PubKey = prevTx.Outputs[in.Out].PubKeyHash
 
 		r := big.Int{}
 		s := big.Int{}
@@ -216,10 +215,10 @@ func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
 		dataToVerify := fmt.Sprintf("%x\n", txCopy)
 
 		rawPubKey := ecdsa.PublicKey{Curve: curve, X: &x, Y: &y}
-		if ecdsa.Verify(&rawPubKey, []byte(dataToVerify), &r, &s) == false {
+		if !ecdsa.Verify(&rawPubKey, []byte(dataToVerify), &r, &s) {
 			return false
 		}
-		txCopy.Inputs[inId].PubKey = nil
+		txCopy.Inputs[inID].PubKey = nil
 	}
 
 	return true

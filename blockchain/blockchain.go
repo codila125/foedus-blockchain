@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	DbPath      = "./temp/blocks_%s"
+	DBPath      = "./temp/blocks_%s"
 	genesisData = "Genesis Block - Go Blockchain Implementation"
 )
 
@@ -41,7 +41,7 @@ func DBExists(path string) bool {
 	return true
 }
 
-func NewBlockChain(address string, nodeId string) *BlockChain {
+func NewBlockChain(address string, nodeID string) *BlockChain {
 	/*
 		Creates a new blockchain with a genesis block and stores it in the database.
 		'address' is the address to send the coinbase reward to.
@@ -50,13 +50,13 @@ func NewBlockChain(address string, nodeId string) *BlockChain {
 	var lastHash []byte
 
 	// Ensure a blockchain does not already exist
-	path := fmt.Sprintf(DbPath, nodeId)
+	path := fmt.Sprintf(DBPath, nodeID)
 	if DBExists(path) {
-		log.Printf("[BLOCKCHAIN] Blockchain already exists for node %s", nodeId)
+		log.Printf("[BLOCKCHAIN] Blockchain already exists for node %s", nodeID)
 		runtime.Goexit()
 	}
 
-	log.Printf("[BLOCKCHAIN] Initializing new blockchain for node %s", nodeId)
+	log.Printf("[BLOCKCHAIN] Initializing new blockchain for node %s", nodeID)
 
 	if err := os.MkdirAll(path, 0o755); err != nil {
 		log.Panic(err)
@@ -83,22 +83,22 @@ func NewBlockChain(address string, nodeId string) *BlockChain {
 	Handle(err)
 
 	blockchain := BlockChain{lastHash, db}
-	log.Printf("[BLOCKCHAIN] Blockchain initialized successfully for node %s", nodeId)
+	log.Printf("[BLOCKCHAIN] Blockchain initialized successfully for node %s", nodeID)
 	return &blockchain
 }
 
-func ContinueBlockChain(nodeId string) *BlockChain {
+func ContinueBlockChain(nodeID string) *BlockChain {
 	/*
 		Continues an existing blockchain by loading it from the database.
 		Returns a pointer to the BlockChain instance.
 	*/
-	path := fmt.Sprintf(DbPath, nodeId)
+	path := fmt.Sprintf(DBPath, nodeID)
 	if !DBExists(path) {
-		log.Printf("[BLOCKCHAIN] No existing blockchain found for node %s", nodeId)
+		log.Printf("[BLOCKCHAIN] No existing blockchain found for node %s", nodeID)
 		runtime.Goexit()
 	}
 
-	log.Printf("[BLOCKCHAIN] Loading existing blockchain for node %s", nodeId)
+	log.Printf("[BLOCKCHAIN] Loading existing blockchain for node %s", nodeID)
 
 	var lastHash []byte
 
@@ -117,9 +117,9 @@ func ContinueBlockChain(nodeId string) *BlockChain {
 
 	Handle(err)
 
-	chain := BlockChain{lastHash, db}
-	log.Printf("[BLOCKCHAIN] Blockchain loaded successfully with height %d", chain.GetBestHeight())
-	return &chain
+	blockchain := BlockChain{lastHash, db}
+	log.Printf("[BLOCKCHAIN] Blockchain loaded successfully with height %d", blockchain.GetBestHeight())
+	return &blockchain
 }
 
 func (blockchain *BlockChain) MineBlock(transactions []*Transaction) *Block {
@@ -149,7 +149,7 @@ func (blockchain *BlockChain) MineBlock(transactions []*Transaction) *Block {
 		item, err := txn.Get([]byte("lh"))
 		Handle(err)
 		lastHash, err = item.ValueCopy(nil)
-
+		Handle(err)
 		item, err = txn.Get(lastHash)
 		Handle(err)
 		blockData, err := item.ValueCopy(nil)
@@ -184,14 +184,14 @@ func (blockchain *BlockChain) MineBlock(transactions []*Transaction) *Block {
 	return newBlock
 }
 
-func (chain *BlockChain) AddBlock(block *Block) error {
+func (blockchain *BlockChain) AddBlock(block *Block) error {
 	/*
 		Adds a block to the blockchain if it does not already exist.
 		'block' is a pointer to the Block instance to be added.
 		Returns an error if any operation fails, otherwise returns nil.
 	*/
 
-	err := chain.Database.Update(func(txn *badger.Txn) error {
+	err := blockchain.Database.Update(func(txn *badger.Txn) error {
 		// Check if block already exists
 		if _, err := txn.Get(block.Hash); err == nil {
 			return nil // Block already exists
@@ -217,7 +217,7 @@ func (chain *BlockChain) AddBlock(block *Block) error {
 			return fmt.Errorf("could not get last block: %w", err)
 		}
 		lastBlock, err := item.ValueCopy(nil)
-
+		Handle(err)
 		lastBlockData := Deserialize(lastBlock)
 
 		// Update the last hash only if the new block's height is greater
@@ -226,7 +226,7 @@ func (chain *BlockChain) AddBlock(block *Block) error {
 			if err != nil {
 				return fmt.Errorf("could not update last hash: %w", err)
 			}
-			chain.LastHash = block.Hash
+			blockchain.LastHash = block.Hash
 			log.Printf("[BLOCKCHAIN] Block added and chain updated - Hash: %x, Height: %d", block.Hash, block.Height)
 		} else {
 			log.Printf("[BLOCKCHAIN] Block added to database - Hash: %x, Height: %d", block.Hash, block.Height)
@@ -238,7 +238,7 @@ func (chain *BlockChain) AddBlock(block *Block) error {
 	return err
 }
 
-func (chain *BlockChain) GetBlock(blockHash []byte) (Block, error) {
+func (blockchain *BlockChain) GetBlock(blockHash []byte) (Block, error) {
 	/*
 		Retrieves a block from the blockchain by its hash.
 		'blockHash' is the hash of the block to be retrieved.
@@ -246,7 +246,7 @@ func (chain *BlockChain) GetBlock(blockHash []byte) (Block, error) {
 	*/
 	var block Block
 
-	err := chain.Database.View(func(txn *badger.Txn) error {
+	err := blockchain.Database.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(blockHash)
 		Handle(err)
 		blockData, err := item.ValueCopy(nil)
@@ -260,13 +260,13 @@ func (chain *BlockChain) GetBlock(blockHash []byte) (Block, error) {
 	return block, nil
 }
 
-func (BlockChain *BlockChain) GetBlockHashes() [][]byte {
+func (blockchain *BlockChain) GetBlockHashes() [][]byte {
 	/*
 		Retrieves all block hashes in the blockchain.
 		Returns a slice of byte slices, each representing a block hash.
 	*/
 	var blocks [][]byte
-	iterator := BlockChain.Iterator() // Create an iterator to traverse the blockchain
+	iterator := blockchain.Iterator() // Create an iterator to traverse the blockchain
 
 	for {
 		block := iterator.Next()
