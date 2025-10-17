@@ -3,7 +3,7 @@ package blockchain
 import (
 	"bytes"
 	"encoding/gob"
-	"github.com/codila125/foedus/wallet"
+	"github.com/codila125/foedus-blockchain/wallet"
 )
 
 type TxOutput struct {

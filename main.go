@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/codila125/foedus/cli"
+	"github.com/codila125/foedus-blockchain/cli"
 	"os"
 )
 

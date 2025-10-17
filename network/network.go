@@ -6,7 +6,7 @@ import (
 	"encoding/gob"
 	"encoding/hex"
 	"fmt"
-	"github.com/codila125/foedus/blockchain"
+	"github.com/codila125/foedus-blockchain/blockchain"
 	"io"
 	"log"
 	"net"
