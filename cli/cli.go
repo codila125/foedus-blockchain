@@ -4,9 +4,9 @@ package cli
 import (
 	"flag"
 	"fmt"
-	"go_blockchain/blockchain"
-	"go_blockchain/network"
-	"go_blockchain/wallet"
+	"github.com/codila125/foedus/blockchain"
+	"github.com/codila125/foedus/network"
+	"github.com/codila125/foedus/wallet"
 	"log"
 	"os"
 	"runtime"

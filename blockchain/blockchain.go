@@ -17,7 +17,7 @@ import (
 
 const (
 	DBPath      = "./temp/blocks_%s"
-	genesisData = "Genesis Block - Go Blockchain Implementation"
+	genesisData = "Genesis Block - Foedus"
 )
 
 type BlockChain struct {
@@ -63,6 +63,7 @@ func NewBlockChain(address string, nodeID string) *BlockChain {
 	}
 
 	options := badger.DefaultOptions(path) // Set default options for BadgerDB
+	options.Logger = nil                   // Disable BadgerDB verbose logging
 
 	db, err := openDB(path, options)
 	Handle(err)
@@ -103,6 +104,7 @@ func ContinueBlockChain(nodeID string) *BlockChain {
 	var lastHash []byte
 
 	options := badger.DefaultOptions(path) // Set default options for BadgerDB
+	options.Logger = nil                   // Disable BadgerDB verbose logging
 	db, err := openDB(path, options)
 	Handle(err)
 

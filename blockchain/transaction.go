@@ -9,7 +9,7 @@ import (
 	"encoding/gob"
 	"encoding/hex"
 	"fmt"
-	"go_blockchain/wallet"
+	"github.com/codila125/foedus/wallet"
 	"log"
 	"math/big"
 	"strings"

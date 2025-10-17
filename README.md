@@ -1,4 +1,4 @@
-# go_blockchain
+# foedus
 
 A compact, production-oriented blockchain implementation in Go. This repository contains a simple Proof-of-Work blockchain, a UTXO model, wallet utilities, and a small P2P network layer for synchronizing blocks and transactions.
 
@@ -15,8 +15,8 @@ A compact, production-oriented blockchain implementation in Go. This repository 
 2. Clone the repository and download dependencies:
 
 ```bash
-git clone https://github.com/yourusername/go_blockchain.git
-cd go_blockchain
+git clone https://github.com/codila125/foedus-blockchain.git
+cd foedus-blockchain
 go mod download
 go build ./...
 ```
@@ -77,4 +77,3 @@ The project uses structured, prefixed logs (e.g. `[BLOCKCHAIN]`, `[NETWORK]`, `[
 ## License
 
 MIT
-# go_blockchain

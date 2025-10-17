@@ -1,4 +1,4 @@
-module go_blockchain
+module github.com/codila125/foedus
 
 go 1.25.1
 

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"go_blockchain/cli"
+	"github.com/codila125/foedus/cli"
 	"os"
 )
 

@@ -1,7 +1,7 @@
 # Blockchain Logging Standards
 
 ## Overview
-This document describes the standardized logging format used throughout the Go Blockchain project.
+This document describes the standardized logging format used throughout the Foedus project.
 
 ## Log Format Structure
 
