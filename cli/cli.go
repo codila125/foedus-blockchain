@@ -61,8 +61,7 @@ func (cli *CommandLine) createWallet(nodeID string) {
 	address := wallets.AddWallet()
 	wallets.SaveFile(nodeID)
 
-	log.Printf("[WALLET] New wallet created successfully")
-	fmt.Printf("New address: %s\n", address)
+	log.Printf("[WALLET] New wallet created successfully with address: %s\n", address)
 }
 
 func (cli *CommandLine) printChain(nodeID string) {
@@ -138,8 +137,7 @@ func (cli *CommandLine) getBalance(address string, nodeID string) {
 		balance += out.Value
 	}
 
-	log.Printf("[CLI] Balance retrieved: %d", balance)
-	fmt.Printf("Balance of %s: %d\n", address, balance)
+	log.Printf("[CLI] Balance of %s retrieved: %d", address, balance)
 }
 
 func (cli *CommandLine) send(from, to string, amount int, nodeID string, mineNow bool) {

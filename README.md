@@ -1,6 +1,6 @@
 # foedus
 
-A compact, production-oriented blockchain implementation in Go. This repository contains a simple Proof-of-Work blockchain, a UTXO model, wallet utilities, and a small P2P network layer for synchronizing blocks and transactions.
+A compact, production-oriented blockchain implementation. This repository contains a simple Proof-of-Work blockchain, a UTXO model, wallet utilities, and a small P2P network layer for synchronizing blocks and transactions.
 
 ## Quick facts
 

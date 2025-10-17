@@ -8,11 +8,10 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"runtime"
-	"strings"
 
-	badger "github.com/dgraph-io/badger/v4"
+	"github.com/cockroachdb/pebble"
+	"github.com/codila125/foedus-blockchain/database"
 )
 
 const (
@@ -21,24 +20,13 @@ const (
 )
 
 type BlockChain struct {
-	LastHash []byte     // Hash of the last block in the chain
-	Database *badger.DB // Reference to the BadgerDB database
+	LastHash []byte             // Hash of the last block in the chain
+	Database *database.PebbleDB // Reference to the PebbleDB database
 }
 
 type BlockChainIterator struct {
-	CurrentHash []byte     // Hash of the current block in the iteration
-	Database    *badger.DB // Reference to the BadgerDB database
-}
-
-func DBExists(path string) bool {
-	/*
-		Checks if the blockchain database file exists.
-		Returns true if the database file exists, false otherwise.
-	*/
-	if _, err := os.Stat(path + "/MANIFEST"); os.IsNotExist(err) {
-		return false
-	}
-	return true
+	CurrentHash []byte             // Hash of the current block in the iteration
+	Database    *database.PebbleDB // Reference to the PebbleDB database
 }
 
 func NewBlockChain(address string, nodeID string) *BlockChain {
@@ -51,7 +39,7 @@ func NewBlockChain(address string, nodeID string) *BlockChain {
 
 	// Ensure a blockchain does not already exist
 	path := fmt.Sprintf(DBPath, nodeID)
-	if DBExists(path) {
+	if database.DBExists(path) {
 		log.Printf("[BLOCKCHAIN] Blockchain already exists for node %s", nodeID)
 		runtime.Goexit()
 	}
@@ -62,25 +50,25 @@ func NewBlockChain(address string, nodeID string) *BlockChain {
 		log.Panic(err)
 	}
 
-	options := badger.DefaultOptions(path) // Set default options for BadgerDB
-	options.Logger = nil                   // Disable BadgerDB verbose logging
-
-	db, err := openDB(path, options)
+	db, err := database.OpenDB(path)
 	Handle(err)
 
-	err = db.Update(func(txn *badger.Txn) error {
-		cbtx := CoinbaseTx(address, genesisData) // Create the coinbase transaction for the genesis block
-		genesis := Genesis(cbtx)                 // Create the genesis block
-		log.Printf("[BLOCKCHAIN] Genesis block created - Hash: %x", genesis.Hash)
-		err := txn.Set(genesis.Hash, genesis.Serialize()) // Store the genesis block in the database
-		Handle(err)
-		err = txn.Set([]byte("lh"), genesis.Hash) // Store the last hash pointer because it helps to find the last block
+	rawDB := db.GetRawDB()
+	batch := rawDB.NewBatch()
+	defer batch.Close()
 
-		lastHash = genesis.Hash // Set the last hash to the genesis block's hash
+	// Create the genesis block and store it in the database
+	cbtx := CoinbaseTx(address, genesisData) // Create the coinbase transaction for the genesis block
+	genesis := Genesis(cbtx)                 // Create the genesis block
+	log.Printf("[BLOCKCHAIN] Genesis block created - Hash: %x", genesis.Hash)
 
-		return err
-	})
+	err = batch.Set(genesis.Hash, genesis.Serialize(), nil) // Store the genesis block in the database
+	Handle(err)
+	err = batch.Set([]byte("lh"), genesis.Hash, nil) // Store the last hash pointer because it helps to find the last block
+	Handle(err)
+	lastHash = genesis.Hash // Set the last hash to the genesis block's hash
 
+	err = rawDB.Apply(batch, &pebble.WriteOptions{Sync: true})
 	Handle(err)
 
 	blockchain := BlockChain{lastHash, db}
@@ -94,7 +82,7 @@ func ContinueBlockChain(nodeID string) *BlockChain {
 		Returns a pointer to the BlockChain instance.
 	*/
 	path := fmt.Sprintf(DBPath, nodeID)
-	if !DBExists(path) {
+	if !database.DBExists(path) {
 		log.Printf("[BLOCKCHAIN] No existing blockchain found for node %s", nodeID)
 		runtime.Goexit()
 	}
@@ -103,21 +91,17 @@ func ContinueBlockChain(nodeID string) *BlockChain {
 
 	var lastHash []byte
 
-	options := badger.DefaultOptions(path) // Set default options for BadgerDB
-	options.Logger = nil                   // Disable BadgerDB verbose logging
-	db, err := openDB(path, options)
+	db, err := database.OpenDB(path)
 	Handle(err)
 
 	// Read the last hash from the database
-	err = db.Update(func(txn *badger.Txn) error {
-		item, err := txn.Get([]byte("lh"))
-		Handle(err)
-		lastHash, err = item.ValueCopy(nil)
-
-		return err
-	})
-
-	Handle(err)
+	lastHashBytes, err := db.Get([]byte("lh"))
+	if err == nil {
+		lastHash = make([]byte, len(lastHashBytes))
+		copy(lastHash, lastHashBytes)
+	} else {
+		log.Panicf("[BLOCKCHAIN] Failed to retrieve last hash for node %s: %v", nodeID, err)
+	}
 
 	blockchain := BlockChain{lastHash, db}
 	log.Printf("[BLOCKCHAIN] Blockchain loaded successfully with height %d", blockchain.GetBestHeight())
@@ -146,39 +130,42 @@ func (blockchain *BlockChain) MineBlock(transactions []*Transaction) *Block {
 		}
 	}
 
+	db := blockchain.Database.GetRawDB()
+
 	// Get the last hash from the database
-	err := blockchain.Database.View(func(txn *badger.Txn) error {
-		item, err := txn.Get([]byte("lh"))
-		Handle(err)
-		lastHash, err = item.ValueCopy(nil)
-		Handle(err)
-		item, err = txn.Get(lastHash)
-		Handle(err)
-		blockData, err := item.ValueCopy(nil)
-		Handle(err)
-		block := Deserialize(blockData)
-		lastHeight = block.Height
+	lastHashBytes, closer, err := db.Get([]byte("lh"))
+	if err == nil {
+		lastHash = make([]byte, len(lastHashBytes))
+		copy(lastHash, lastHashBytes)
+		closer.Close()
+	} else {
+		log.Panicf("[BLOCKCHAIN] Failed to retrieve last hash: %v", err)
+	}
 
-		return err
-	})
+	lastBlockData, closer, err := db.Get(lastHash)
+	if err != nil {
+		log.Panicf("[BLOCKCHAIN] Failed to retrieve last block: %v", err)
+	}
+	blockDataCopy := make([]byte, len(lastBlockData))
+	copy(blockDataCopy, lastBlockData)
+	closer.Close()
 
-	Handle(err)
-
+	lastBlock := Deserialize(blockDataCopy)
+	lastHeight = lastBlock.Height
 	newBlock := CreateBlock(transactions, lastHash, lastHeight+1) // Create a new block with the transactions and previous hash
 
 	// Store the new block in the database and update the last hash pointer
-	err = blockchain.Database.Update(func(txn *badger.Txn) error {
-		err := txn.Set(newBlock.Hash, newBlock.Serialize())
-		Handle(err)
-		err = txn.Set([]byte("lh"), newBlock.Hash)
+	batch := db.NewBatch()
+	defer batch.Close()
 
-		blockchain.LastHash = newBlock.Hash
-		return err
-	})
+	batch.Set(newBlock.Hash, newBlock.Serialize(), nil)
+	batch.Set([]byte("lh"), newBlock.Hash, nil)
 
-	Handle(err)
-
+	blockchain.LastHash = newBlock.Hash
 	log.Printf("[MINING] Block mined successfully - Hash: %x, Height: %d", newBlock.Hash, newBlock.Height)
+
+	err = db.Apply(batch, &pebble.WriteOptions{Sync: true})
+	Handle(err)
 
 	utxoSet := UTXOSet{blockchain}
 	utxoSet.Update(newBlock)
@@ -193,51 +180,60 @@ func (blockchain *BlockChain) AddBlock(block *Block) error {
 		Returns an error if any operation fails, otherwise returns nil.
 	*/
 
-	err := blockchain.Database.Update(func(txn *badger.Txn) error {
-		// Check if block already exists
-		if _, err := txn.Get(block.Hash); err == nil {
-			return nil // Block already exists
-		}
+	db := blockchain.Database.GetRawDB()
+	batch := db.NewBatch()
+	defer batch.Close()
 
-		// Add the block to the database
-		err := txn.Set(block.Hash, block.Serialize())
+	_, closer, err := db.Get(block.Hash)
+	if err == nil {
+		closer.Close()
+		return nil // Block already exists
+	}
+
+	//Store block in database
+	err = batch.Set(block.Hash, block.Serialize(), nil)
+	if err != nil {
+		return err
+	}
+
+	lastHash, closer, err := db.Get([]byte("lh"))
+	if err != nil {
+		return fmt.Errorf("could not get last hash: %w", err)
+	}
+	lastHashCopy := make([]byte, len(lastHash))
+	copy(lastHashCopy, lastHash)
+	closer.Close()
+
+	lastBlockData, closer, err := db.Get(lastHashCopy)
+	if err != nil {
+		return fmt.Errorf("could not get last block: %w", err)
+	}
+	blockDataCopy := make([]byte, len(lastBlockData))
+	copy(blockDataCopy, lastBlockData)
+	closer.Close()
+
+	lastBlock := Deserialize(blockDataCopy)
+
+	if lastBlock == nil {
+		return fmt.Errorf("could not deserialize last block")
+	}
+
+	// Update the last hash only if the new block's height is greater
+	if block.Height > lastBlock.Height {
+		err = batch.Set([]byte("lh"), block.Hash, nil)
 		if err != nil {
-			return err
+			return fmt.Errorf("could not update last hash: %w", err)
 		}
-		// Get the current last hash
-		item, err := txn.Get([]byte("lh"))
-		if err != nil {
-			return fmt.Errorf("could not get last hash: %w", err)
-		}
-		lastHash, err := item.ValueCopy(nil)
-		if err != nil {
-			return fmt.Errorf("could not copy last hash: %w", err)
-		}
+		blockchain.LastHash = block.Hash
+		log.Printf("[BLOCKCHAIN] Block added and chain updated - Hash: %x, Height: %d", block.Hash, block.Height)
+	} else {
+		log.Printf("[BLOCKCHAIN] Block added to database - Hash: %x, Height: %d", block.Hash, block.Height)
+	}
 
-		item, err = txn.Get(lastHash)
-		if err != nil {
-			return fmt.Errorf("could not get last block: %w", err)
-		}
-		lastBlock, err := item.ValueCopy(nil)
-		Handle(err)
-		lastBlockData := Deserialize(lastBlock)
+	err = db.Apply(batch, &pebble.WriteOptions{Sync: true})
+	Handle(err)
 
-		// Update the last hash only if the new block's height is greater
-		if block.Height > lastBlockData.Height {
-			err = txn.Set([]byte("lh"), block.Hash)
-			if err != nil {
-				return fmt.Errorf("could not update last hash: %w", err)
-			}
-			blockchain.LastHash = block.Hash
-			log.Printf("[BLOCKCHAIN] Block added and chain updated - Hash: %x, Height: %d", block.Hash, block.Height)
-		} else {
-			log.Printf("[BLOCKCHAIN] Block added to database - Hash: %x, Height: %d", block.Hash, block.Height)
-		}
-
-		return nil
-	})
-
-	return err
+	return nil
 }
 
 func (blockchain *BlockChain) GetBlock(blockHash []byte) (Block, error) {
@@ -248,17 +244,17 @@ func (blockchain *BlockChain) GetBlock(blockHash []byte) (Block, error) {
 	*/
 	var block Block
 
-	err := blockchain.Database.View(func(txn *badger.Txn) error {
-		item, err := txn.Get(blockHash)
-		Handle(err)
-		blockData, err := item.ValueCopy(nil)
-		Handle(err)
-		block = *Deserialize(blockData)
+	db := blockchain.Database.GetRawDB()
+	blockData, closer, err := db.Get(blockHash)
+	if err != nil {
+		return block, fmt.Errorf("could not get block: %w", err)
+	}
+	blockDataCopy := make([]byte, len(blockData))
+	copy(blockDataCopy, blockData)
+	closer.Close()
 
-		return err
-	})
+	block = *Deserialize(blockDataCopy)
 
-	Handle(err)
 	return block, nil
 }
 
@@ -284,25 +280,25 @@ func (blockchain *BlockChain) GetBestHeight() int {
 	/*
 		Returns the height of the latest block in the blockchain.
 	*/
-	var lastBlock Block
+	db := blockchain.Database.GetRawDB()
 
-	err := blockchain.Database.View(func(txn *badger.Txn) error {
-		item, err := txn.Get([]byte("lh"))
+	lastHash, closer, err := db.Get([]byte("lh"))
+	if err != nil {
 		Handle(err)
-		lastHash, err := item.ValueCopy(nil)
+	}
+	lastHashCopy := make([]byte, len(lastHash))
+	copy(lastHashCopy, lastHash)
+	closer.Close()
+
+	lastBlockData, closer, err := db.Get(lastHashCopy)
+	if err != nil {
 		Handle(err)
+	}
+	blockDataCopy := make([]byte, len(lastBlockData))
+	copy(blockDataCopy, lastBlockData)
+	closer.Close()
 
-		item, err = txn.Get(lastHash)
-		Handle(err)
-		blockData, err := item.ValueCopy(nil)
-		Handle(err)
-
-		lastBlock = *Deserialize(blockData)
-
-		return err
-	})
-
-	Handle(err)
+	lastBlock := *Deserialize(blockDataCopy)
 	return lastBlock.Height
 }
 
@@ -427,40 +423,4 @@ func (blockchain *BlockChain) VerifyTransaction(tx *Transaction, txMap map[strin
 	}
 
 	return true
-}
-
-func retry(dir string, originalOpts badger.Options) (*badger.DB, error) {
-	/*
-		Attempts to open the Badger database with the original options.
-		Lock files exist if the previous instance did not close properly.
-		If it fails, it removes the lock file and retries opening the database.
-	*/
-	lockPath := filepath.Join(dir, "LOCK")
-	if err := os.Remove(lockPath); err != nil { // Remove the lock file
-		return nil, err
-	}
-	log.Printf("[DATABASE] Retrying database connection after removing lock file")
-	retryOpts := originalOpts  // Retry opening the database with the original options
-	retryOpts.ReadOnly = false // Ensure ReadOnly is false for retry
-	return badger.Open(retryOpts)
-}
-
-func openDB(dir string, options badger.Options) (*badger.DB, error) {
-	/*
-		Attempts to open the Badger database with the specified options.
-		If it fails, it retries opening the database with modified options.
-	*/
-	if db, err := badger.Open(options); err != nil {
-		if strings.Contains(err.Error(), "LOCK") { // Check if the error is related to a lock file
-			log.Printf("[DATABASE] Database locked, attempting recovery")
-			if db, err := retry(dir, options); err == nil {
-				log.Printf("[DATABASE] Database opened successfully after retry")
-				return db, nil
-			}
-			log.Printf("[DATABASE] Failed to open database after retry")
-		}
-		return nil, err
-	} else {
-		return db, nil
-	}
 }

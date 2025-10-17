@@ -1,8 +1,5 @@
 package blockchain
 
-import (
-	badger "github.com/dgraph-io/badger/v4"
-)
 
 func (blockchain *BlockChain) Iterator() *BlockChainIterator {
 	/*
@@ -18,20 +15,22 @@ func (iter *BlockChainIterator) Next() *Block {
 		Update the iterator's current hash to the previous block's hash for the next call.
 		Return the deserialized block.
 	*/
-	var block *Block
+    db := iter.Database.GetRawDB()
+    
+    blockData, closer, err := db.Get(iter.CurrentHash)
+    if err != nil {
+        Handle(err)
+    }
+    defer closer.Close()
 
-	err := iter.Database.View(func(txn *badger.Txn) error {
-		item, err := txn.Get(iter.CurrentHash) // Get the block data for the current hash
-		Handle(err)
-		encodedBlock, err := item.ValueCopy(nil) // Copy the block data
-		block = Deserialize(encodedBlock)        // Deserialize the block
+    // Copy data before closing the closer
+    blockDataCopy := make([]byte, len(blockData))
+    copy(blockDataCopy, blockData)
 
-		return err
-	})
+    block := Deserialize(blockDataCopy)
 
-	Handle(err)
+    // Move to the previous block for next iteration
+    iter.CurrentHash = block.PrevHash
 
-	iter.CurrentHash = block.PrevHash // Move to the previous block for the next iteration
-
-	return block
+    return block
 }
