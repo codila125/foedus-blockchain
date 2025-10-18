@@ -57,7 +57,7 @@ func (out *TxOutput) IsLockedWithKey(pubKeyHash []byte) bool {
 	return bytes.Equal(out.PubKeyHash, pubKeyHash)
 }
 
-func (outs TxOutputs) Serialize() []byte {
+func (outs TxOutputs) SerializeOutputs() []byte {
 	/*
 		Serializes the TxOutputs struct into a byte slice.
 	*/

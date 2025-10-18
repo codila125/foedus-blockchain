@@ -4,13 +4,13 @@ package cli
 import (
 	"flag"
 	"fmt"
-	"github.com/codila125/foedus-blockchain/blockchain"
-	"github.com/codila125/foedus-blockchain/network"
-	"github.com/codila125/foedus-blockchain/wallet"
 	"log"
 	"os"
 	"runtime"
-	"strconv"
+
+	"github.com/codila125/foedus-blockchain/blockchain"
+	"github.com/codila125/foedus-blockchain/network"
+	"github.com/codila125/foedus-blockchain/wallet"
 )
 
 type CommandLine struct{}
@@ -28,6 +28,7 @@ func (cli *CommandLine) printUsage() {
 	fmt.Println(" listaddresses : lists the addresses in our wallet file")
 	fmt.Println(" reindexutxo : rebuilds the UTXO set")
 	fmt.Println(" startnode -miner <ADDRESS> : starts a node with ID specified in NODE_ID env. var. -miner enables mining")
+	fmt.Println(" createcontract -title <TITLE> -creator <CREATOR_ADDRESS> -description <DESCRIPTION> -parties <PARTY_ADDRESSES> : creates a new contract")
 }
 
 func (cli *CommandLine) validateArgs() {
@@ -66,25 +67,23 @@ func (cli *CommandLine) createWallet(nodeID string) {
 
 func (cli *CommandLine) printChain(nodeID string) {
 	/*
-		Prints all the blocks in the blockchain along with their details.
+		Prints all the blocks in the blockchain along with their details in a formatted block structure.
 	*/
 	chain := blockchain.ContinueBlockChain(nodeID) // Load the existing blockchain
 	defer chain.Database.Close()
 	iter := chain.Iterator()
 
+	blockNumber := 0
 	// Iterate through the blocks in the blockchain and print their details
 	for {
 		block := iter.Next() // Get the next block
 
-		fmt.Printf("Prev. hash: %x\n", block.PrevHash)
-		fmt.Printf("Hash: %x\n", block.Hash)
-		pow := blockchain.NewProof(block)                           // Create a new Proof of Work for the block
-		fmt.Printf("PoW: %s\n", strconv.FormatBool(pow.Validate())) // Validate the Proof of Work beacuse everytime we print the block we want to make sure the PoW is valid
-		for _, tx := range block.Transactions {
-			fmt.Println(tx)
-		}
-		fmt.Println()
+		cli.printBlockHeader(block, blockNumber)
+		cli.printBlockContracts(block)
+		cli.printBlockTransactions(block)
+		cli.printBlockFooter()
 
+		blockNumber++
 		// Break the loop if we reach the genesis block (no previous hash)
 		if len(block.PrevHash) == 0 {
 			break
@@ -140,6 +139,47 @@ func (cli *CommandLine) getBalance(address string, nodeID string) {
 	log.Printf("[CLI] Balance of %s retrieved: %d", address, balance)
 }
 
+func (cli *CommandLine) createContract(title, description, creator, parties, nodeID string) {
+	/*
+		Creates a new contract on the blockchain with the specified details.
+	*/
+	// Validate the creator's address
+	if !wallet.ValidateAddress(creator) {
+		log.Panic("[CLI] Invalid creator address")
+	}
+
+	log.Printf("[CLI] Creating contract: %s", title)
+
+	// Load the existing blockchain and UTXO set
+	chain := blockchain.ContinueBlockChain(nodeID)
+	defer chain.Database.Close()
+	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
+	UTXOSet.Reindex()
+
+	wallets, err := wallet.CreateWallets(nodeID) // Load existing wallets
+	if err != nil {
+		log.Panic(err)
+	}
+	wallet := wallets.GetWallet(creator) // Get the wallet for the creator's address
+	partywallet := wallets.GetWallet(parties) // Get the wallet for the party's address
+
+	party := &blockchain.Party{
+		Address: string(partywallet.Address()),
+		Role:    "CONTRACTOR",
+		PublicKey: partywallet.PublicKey,
+		Signature: []byte{},
+	}
+
+	// Create a new contract transaction
+	ct := blockchain.CreateContract(title, description, &wallet, nil, []*blockchain.Party{party}, nil, "")
+
+	cts := []*blockchain.Contract{ct}     // Include the contract transaction in the new block
+	newBlock := chain.MineBlock(nil, cts) // Mine a new block with the contract transaction
+	UTXOSet.Update(newBlock)              // Update the UTXO set with the new block
+
+	log.Printf("[CLI] ✓ Contract created in block %x", newBlock.Hash)
+}
+
 func (cli *CommandLine) send(from, to string, amount int, nodeID string, mineNow bool) {
 	/*
 		Creates and sends a new transaction from one address to another, including a coinbase transaction for the sender.
@@ -173,7 +213,7 @@ func (cli *CommandLine) send(from, to string, amount int, nodeID string, mineNow
 		log.Printf("[CLI] Mining transaction locally")
 		cbTx := blockchain.CoinbaseTx(from, "")    // Create a coinbase transaction for the sender
 		txs := []*blockchain.Transaction{cbTx, tx} // Include the coinbase transaction in the new block
-		newBlock := chain.MineBlock(txs)           // Mine a new block with the transactions
+		newBlock := chain.MineBlock(txs, nil)      // Mine a new block with the transactions
 		UTXOSet.Update(newBlock)                   // Update the UTXO set with the new block
 		log.Printf("[CLI] ✓ Transaction mined in block %x", newBlock.Hash)
 	} else {
@@ -229,6 +269,7 @@ func (cli *CommandLine) Run() {
 	listAddressesCmd := flag.NewFlagSet("listaddresses", flag.ExitOnError)
 	reindexUTXOCmd := flag.NewFlagSet("reindexutxo", flag.ExitOnError)
 	startNodeCmd := flag.NewFlagSet("startnode", flag.ExitOnError)
+	createContractCmd := flag.NewFlagSet("createcontract", flag.ExitOnError)
 
 	createBlockchainAddress := createBlockchainCmd.String("address", "", "The address to send genesis block reward to")
 	getBalanceAddress := getBalanceCmd.String("address", "", "The address to get balance for")
@@ -237,6 +278,10 @@ func (cli *CommandLine) Run() {
 	sendAmount := sendCmd.Int("amount", 0, "Amount to send")
 	sendMine := sendCmd.Bool("mine", false, "Mine immediately on the same node")
 	startNodeMiner := startNodeCmd.String("miner", "", "Enable mining mode and send reward to ADDRESS")
+	createContractTitle := createContractCmd.String("title", "", "The title of the contract")
+	createContractDescription := createContractCmd.String("description", "", "The description of the contract")
+	createContractCreator := createContractCmd.String("creator", "", "The address of the contract creator")
+	createContractParties := createContractCmd.String("parties", "", "The addresses of the contract parties")
 
 	switch os.Args[1] {
 	case "reindexutxo":
@@ -276,6 +321,11 @@ func (cli *CommandLine) Run() {
 		}
 	case "startnode":
 		err := startNodeCmd.Parse(os.Args[2:])
+		if err != nil {
+			log.Panic(err)
+		}
+	case "createcontract":
+		err := createContractCmd.Parse(os.Args[2:])
 		if err != nil {
 			log.Panic(err)
 		}
@@ -330,5 +380,13 @@ func (cli *CommandLine) Run() {
 			runtime.Goexit()
 		}
 		cli.startNode(nodeID, *startNodeMiner)
+	}
+
+	if createContractCmd.Parsed() {
+		if *createContractTitle == "" || *createContractDescription == "" || *createContractCreator == "" || *createContractParties == "" {
+			createContractCmd.Usage()
+			runtime.Goexit()
+		}
+		cli.createContract(*createContractTitle, *createContractDescription, *createContractCreator, *createContractParties, nodeID)
 	}
 }

@@ -1,10 +1,7 @@
 package blockchain
 
 import (
-	"bytes"
-	"crypto/ecdsa"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -16,7 +13,7 @@ import (
 
 const (
 	DBPath      = "./temp/blocks_%s"
-	genesisData = "Genesis Block - Foedus"
+	genesisData = "Genesis Foedus"
 )
 
 type BlockChain struct {
@@ -59,10 +56,11 @@ func NewBlockChain(address string, nodeID string) *BlockChain {
 
 	// Create the genesis block and store it in the database
 	cbtx := CoinbaseTx(address, genesisData) // Create the coinbase transaction for the genesis block
-	genesis := Genesis(cbtx)                 // Create the genesis block
+	cbct := CoinbaseOp(address, genesisData) // Create the coinbase contract for the genesis block
+	genesis := Genesis(cbtx, cbct)           // Create the genesis block
 	log.Printf("[BLOCKCHAIN] Genesis block created - Hash: %x", genesis.Hash)
 
-	err = batch.Set(genesis.Hash, genesis.Serialize(), nil) // Store the genesis block in the database
+	err = batch.Set(genesis.Hash, genesis.SerializeBlock(), nil) // Store the genesis block in the database
 	Handle(err)
 	err = batch.Set([]byte("lh"), genesis.Hash, nil) // Store the last hash pointer because it helps to find the last block
 	Handle(err)
@@ -108,18 +106,19 @@ func ContinueBlockChain(nodeID string) *BlockChain {
 	return &blockchain
 }
 
-func (blockchain *BlockChain) MineBlock(transactions []*Transaction) *Block {
+func (blockchain *BlockChain) MineBlock(transactions []*Transaction, contracts []*Contract) *Block {
 	/*
-		Adds a new block with the given transactions to the blockchain.
+		Adds a new block with the given transactions and contracts to the blockchain.
 		'transactions' is a slice of pointers to Transaction instances to be included in the new block.
 		Returns a pointer to the newly added Block instance.
 	*/
 	var lastHash []byte
 	var lastHeight int
 
-	log.Printf("[MINING] Starting block mining with %d transaction(s)", len(transactions))
+	log.Printf("[MINING] Starting block mining with %d transaction(s) and %d contract(s)", len(transactions), len(contracts))
 
 	txMap := make(map[string]Transaction)
+	
 	for _, tx := range transactions {
 		txMap[hex.EncodeToString(tx.ID)] = *tx
 	}
@@ -129,6 +128,13 @@ func (blockchain *BlockChain) MineBlock(transactions []*Transaction) *Block {
 			log.Panicf("[MINING] Invalid transaction detected: %x", tx.ID)
 		}
 	}
+
+	for _, ct := range contracts {
+		if !blockchain.VerifyContract(ct) {
+			log.Panicf("[MINING] Invalid contract detected: %x", ct.ID)
+		}
+	}
+
 
 	db := blockchain.Database.GetRawDB()
 
@@ -150,15 +156,15 @@ func (blockchain *BlockChain) MineBlock(transactions []*Transaction) *Block {
 	copy(blockDataCopy, lastBlockData)
 	closer.Close()
 
-	lastBlock := Deserialize(blockDataCopy)
+	lastBlock := DeserializeBlock(blockDataCopy)
 	lastHeight = lastBlock.Height
-	newBlock := CreateBlock(transactions, lastHash, lastHeight+1) // Create a new block with the transactions and previous hash
+	newBlock := CreateBlock(transactions, contracts, lastHash, lastHeight+1) // Create a new block with the transactions and previous hash
 
 	// Store the new block in the database and update the last hash pointer
 	batch := db.NewBatch()
 	defer batch.Close()
 
-	batch.Set(newBlock.Hash, newBlock.Serialize(), nil)
+	batch.Set(newBlock.Hash, newBlock.SerializeBlock(), nil)
 	batch.Set([]byte("lh"), newBlock.Hash, nil)
 
 	blockchain.LastHash = newBlock.Hash
@@ -191,7 +197,7 @@ func (blockchain *BlockChain) AddBlock(block *Block) error {
 	}
 
 	//Store block in database
-	err = batch.Set(block.Hash, block.Serialize(), nil)
+	err = batch.Set(block.Hash, block.SerializeBlock(), nil)
 	if err != nil {
 		return err
 	}
@@ -212,7 +218,7 @@ func (blockchain *BlockChain) AddBlock(block *Block) error {
 	copy(blockDataCopy, lastBlockData)
 	closer.Close()
 
-	lastBlock := Deserialize(blockDataCopy)
+	lastBlock := DeserializeBlock(blockDataCopy)
 
 	if lastBlock == nil {
 		return fmt.Errorf("could not deserialize last block")
@@ -253,7 +259,7 @@ func (blockchain *BlockChain) GetBlock(blockHash []byte) (Block, error) {
 	copy(blockDataCopy, blockData)
 	closer.Close()
 
-	block = *Deserialize(blockDataCopy)
+	block = *DeserializeBlock(blockDataCopy)
 
 	return block, nil
 }
@@ -298,129 +304,6 @@ func (blockchain *BlockChain) GetBestHeight() int {
 	copy(blockDataCopy, lastBlockData)
 	closer.Close()
 
-	lastBlock := *Deserialize(blockDataCopy)
+	lastBlock := *DeserializeBlock(blockDataCopy)
 	return lastBlock.Height
-}
-
-func (blockchain *BlockChain) FindUTXO() map[string]TxOutputs {
-	/*
-		Scans the entire blockchain to find all unspent transaction outputs (UTXOs).
-		Returns a map where the key is the transaction ID and the value is the corresponding unspent outputs.
-	*/
-	UTXO := make(map[string]TxOutputs) // UTXO map to hold unspent transaction outputs
-	spentTXs := make(map[string][]int) // Map to track spent transaction outputs
-
-	iterator := blockchain.Iterator() // Create an iterator to traverse the blockchain
-
-	for {
-		block := iterator.Next() // Get the next block
-
-		for _, tx := range block.Transactions { // Iterate over each transaction in the block
-			txID := hex.EncodeToString(tx.ID) // Encode transaction ID to string
-
-		Outputs:
-			for outIdx, out := range tx.Outputs { // Iterate over each output in the transaction
-				// If the output is already spent, skip it
-				if spentTXs[txID] != nil {
-					for _, spentOut := range spentTXs[txID] {
-						if spentOut == outIdx {
-							continue Outputs
-						}
-					}
-				}
-				outs := UTXO[txID]                       // Initialize outputs for this transaction ID
-				outs.Outputs = append(outs.Outputs, out) // Add the unspent output
-				UTXO[txID] = outs                        // Update the UTXO map with the new output
-			}
-			// If the transaction is not a coinbase, mark its inputs as spent
-			if !tx.IsCoinbase() {
-				for _, in := range tx.Inputs {
-					inTxID := hex.EncodeToString(in.ID)
-					spentTXs[inTxID] = append(spentTXs[inTxID], in.Out) // Mark the output as spent
-				}
-			}
-		}
-		// If we've reached the genesis block, stop iterating
-		if len(block.PrevHash) == 0 {
-			break
-		}
-	}
-	return UTXO
-}
-
-func (blockchain *BlockChain) FindTransaction(ID []byte) (Transaction, error) {
-	/*
-		Finds and returns a transaction by its ID by scanning through all blocks in the blockchain.
-		Returns the transaction if found, otherwise returns an error.
-	*/
-	iterator := blockchain.Iterator()
-	// Iterate through the blocks in the blockchain
-	for {
-		block := iterator.Next()
-
-		for _, tx := range block.Transactions {
-			if bytes.Equal(tx.ID, ID) {
-				return *tx, nil
-			}
-		}
-
-		if len(block.PrevHash) == 0 {
-			break
-		}
-	}
-
-	return Transaction{}, errors.New("Transaction does not exist")
-}
-
-func (blockchain *BlockChain) SignTransaction(tx *Transaction, privKey ecdsa.PrivateKey) {
-	/*
-		Signs a transaction using the provided private key.
-		'tx' is the transaction to be signed.
-		'privKey' is the ECDSA private key used for signing.
-	*/
-	if tx.IsCoinbase() {
-		return
-	}
-	prevTXs := make(map[string]Transaction)
-	for _, in := range tx.Inputs {
-		prevTX, err := blockchain.FindTransaction(in.ID) // Find the previous transaction referenced by the input
-		Handle(err)
-		prevTXs[hex.EncodeToString(prevTX.ID)] = prevTX
-	}
-	tx.Sign(privKey, prevTXs) // Sign the transaction with the private key and previous transactions
-}
-
-func (blockchain *BlockChain) VerifyTransaction(tx *Transaction, txMap map[string]Transaction) bool {
-	/*
-	   Verifies the signatures of a transaction.
-	   'tx' is the transaction to be verified.
-	   'txMap' is a map of other transactions in the same block/pool.
-	   Returns true if the transaction is valid, false otherwise.
-	*/
-	if tx.IsCoinbase() {
-		return true
-	}
-	prevTXs := make(map[string]Transaction)
-
-	for _, in := range tx.Inputs {
-		// First, check if the previous transaction is in the current pool of transactions.
-		if prevTx, ok := txMap[hex.EncodeToString(in.ID)]; ok {
-			prevTXs[hex.EncodeToString(prevTx.ID)] = prevTx
-		} else {
-			// If not in the pool, search the blockchain.
-			prevTX, err := blockchain.FindTransaction(in.ID)
-			if err != nil {
-				log.Printf("[VERIFY] Transaction verification failed - Parent transaction %x not found", in.ID)
-				return false
-			}
-			prevTXs[hex.EncodeToString(prevTX.ID)] = prevTX
-		}
-	}
-
-	if !tx.Verify(prevTXs) {
-		log.Printf("[VERIFY] Transaction %x signature verification failed", tx.ID)
-		return false
-	}
-
-	return true
 }

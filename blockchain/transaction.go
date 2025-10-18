@@ -8,11 +8,13 @@ import (
 	"crypto/sha256"
 	"encoding/gob"
 	"encoding/hex"
+	"errors"
 	"fmt"
-	"github.com/codila125/foedus-blockchain/wallet"
 	"log"
 	"math/big"
 	"strings"
+
+	"github.com/codila125/foedus-blockchain/wallet"
 )
 
 type Transaction struct {
@@ -21,7 +23,7 @@ type Transaction struct {
 	Outputs []TxOutput
 }
 
-func (tx *Transaction) Serialize() []byte {
+func (tx *Transaction) SerializeTransaction() []byte {
 	/*
 		Serializes the transaction using gob encoding.
 		Returns the serialized byte slice.
@@ -37,7 +39,20 @@ func (tx *Transaction) Serialize() []byte {
 	return encoded.Bytes()
 }
 
-func (tx *Transaction) Hash() []byte {
+func DeserializeTransaction(data []byte) Transaction {
+	/*
+		Deserializes a byte slice into a Transaction.
+	*/
+	var transaction Transaction
+
+	decoder := gob.NewDecoder(bytes.NewReader(data))
+	err := decoder.Decode(&transaction)
+	Handle(err)
+
+	return transaction
+}
+
+func (tx *Transaction) HashTransaction() []byte {
 	/*
 		Computes the hash of the transaction.
 		Returns the SHA-256 hash of the serialized transaction.
@@ -47,7 +62,7 @@ func (tx *Transaction) Hash() []byte {
 	txCopy := *tx
 	txCopy.ID = []byte{}
 
-	hash = sha256.Sum256(txCopy.Serialize())
+	hash = sha256.Sum256(txCopy.SerializeTransaction())
 
 	return hash[:]
 }
@@ -71,17 +86,94 @@ func CoinbaseTx(to, data string) *Transaction {
 	txout := NewTxOutput(20, to)                     // Coinbase transaction typically has a fixed reward, here set to 20
 
 	tx := Transaction{nil, []TxInput{txin}, []TxOutput{*txout}} // Create the transaction with the input and output
-	tx.ID = tx.Hash()                                           // Set the transaction ID by hashing the transaction
+	tx.ID = tx.HashTransaction()                                // Set the transaction ID by hashing the transaction
 
 	return &tx
 }
 
-func (tx *Transaction) IsCoinbase() bool {
+func (tx *Transaction) IsCoinbaseTx() bool {
 	/*
 		Checks if the transaction is a coinbase transaction.
 		Returns true if the transaction has exactly one input and that input has an empty ID and an Out value of -1.
 	*/
 	return len(tx.Inputs) == 1 && len(tx.Inputs[0].ID) == 0 && tx.Inputs[0].Out == -1
+}
+
+func (blockchain *BlockChain) FindTransaction(ID []byte) (Transaction, error) {
+	/*
+		Finds and returns a transaction by its ID by scanning through all blocks in the blockchain.
+		Returns the transaction if found, otherwise returns an error.
+	*/
+	iterator := blockchain.Iterator()
+	// Iterate through the blocks in the blockchain
+	for {
+		block := iterator.Next()
+
+		for _, tx := range block.Transactions {
+			if bytes.Equal(tx.ID, ID) {
+				return *tx, nil
+			}
+		}
+
+		if len(block.PrevHash) == 0 {
+			break
+		}
+	}
+
+	return Transaction{}, errors.New("Transaction does not exist")
+}
+
+func (blockchain *BlockChain) SignTransaction(tx *Transaction, privKey ecdsa.PrivateKey) {
+	/*
+		Signs a transaction using the provided private key.
+		'tx' is the transaction to be signed.
+		'privKey' is the ECDSA private key used for signing.
+	*/
+	if tx.IsCoinbaseTx() {
+		return
+	}
+	prevTXs := make(map[string]Transaction)
+	for _, in := range tx.Inputs {
+		prevTX, err := blockchain.FindTransaction(in.ID) // Find the previous transaction referenced by the input
+		Handle(err)
+		prevTXs[hex.EncodeToString(prevTX.ID)] = prevTX
+	}
+	tx.Sign(privKey, prevTXs) // Sign the transaction with the private key and previous transactions
+}
+
+func (blockchain *BlockChain) VerifyTransaction(tx *Transaction, txMap map[string]Transaction) bool {
+	/*
+	   Verifies the signatures of a transaction.
+	   'tx' is the transaction to be verified.
+	   'txMap' is a map of other transactions in the same block/pool.
+	   Returns true if the transaction is valid, false otherwise.
+	*/
+	if tx.IsCoinbaseTx() {
+		return true
+	}
+	prevTXs := make(map[string]Transaction)
+
+	for _, in := range tx.Inputs {
+		// First, check if the previous transaction is in the current pool of transactions.
+		if prevTx, ok := txMap[hex.EncodeToString(in.ID)]; ok {
+			prevTXs[hex.EncodeToString(prevTx.ID)] = prevTx
+		} else {
+			// If not in the pool, search the blockchain.
+			prevTX, err := blockchain.FindTransaction(in.ID)
+			if err != nil {
+				log.Printf("[VERIFY] Transaction verification failed - Parent transaction %x not found", in.ID)
+				return false
+			}
+			prevTXs[hex.EncodeToString(prevTX.ID)] = prevTX
+		}
+	}
+
+	if !tx.Verify(prevTXs) {
+		log.Printf("[VERIFY] Transaction %x signature verification failed", tx.ID)
+		return false
+	}
+
+	return true
 }
 
 func NewTransaction(w *wallet.Wallet, to string, amount int, UTXO *UTXOSet) *Transaction {
@@ -122,7 +214,7 @@ func NewTransaction(w *wallet.Wallet, to string, amount int, UTXO *UTXOSet) *Tra
 	}
 
 	tx := Transaction{nil, inputs, outputs}    // Create the transaction with inputs and outputs
-	tx.ID = tx.Hash()                          // Sign the transaction to prove ownership of the inputs
+	tx.ID = tx.HashTransaction()               // Sign the transaction to prove ownership of the inputs
 	privatekey, err := w.ReconstructECDSAKey() // Reconstruct the ECDSA private key from the wallet
 	Handle(err)
 	UTXO.Blockchain.SignTransaction(&tx, *privatekey)
@@ -132,7 +224,7 @@ func NewTransaction(w *wallet.Wallet, to string, amount int, UTXO *UTXOSet) *Tra
 }
 
 func (tx *Transaction) Sign(privKey ecdsa.PrivateKey, prevTXs map[string]Transaction) {
-	if tx.IsCoinbase() {
+	if tx.IsCoinbaseTx() {
 		return
 	}
 
@@ -181,7 +273,7 @@ func (tx *Transaction) TrimmedCopy() Transaction {
 }
 
 func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
-	if tx.IsCoinbase() {
+	if tx.IsCoinbaseTx() {
 		return true
 	}
 
@@ -225,37 +317,34 @@ func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
 }
 
 func (tx Transaction) String() string {
-	/*
-		Returns a human-readable string representation of the transaction.
-	*/
-	var lines []string
-	lines = append(lines, fmt.Sprintf("--- Transaction %x:", tx.ID))
+	var b strings.Builder
+
+	b.WriteString(fmt.Sprintf("╭─── TRANSACTION [%.16x...] ───╮\n", tx.ID))
+
+	// Inputs
+	b.WriteString(fmt.Sprintf("├─ INPUTS (%d)\n", len(tx.Inputs)))
+	if len(tx.Inputs) == 0 {
+		b.WriteString("│   (No Inputs)\n")
+	}
 	for i, input := range tx.Inputs {
-		lines = append(lines, fmt.Sprintf("     Input %d:", i))
-		lines = append(lines, fmt.Sprintf("       TXID:      %x", input.ID))
-		lines = append(lines, fmt.Sprintf("       Out:       %d", input.Out))
-		lines = append(lines, fmt.Sprintf("       Signature: %x", input.Signature))
-		lines = append(lines, fmt.Sprintf("       PubKey:    %x", input.PubKey))
+		if tx.IsCoinbaseTx() {
+			b.WriteString(fmt.Sprintf("│   [COINBASE] → Reward Data: %s\n", input.PubKey))
+		} else {
+			b.WriteString(fmt.Sprintf("│   [%d] From TX: %.16x...\n", i, input.ID))
+			b.WriteString(fmt.Sprintf("│       Output Index: %d\n", input.Out))
+		}
 	}
 
+	// Outputs
+	b.WriteString(fmt.Sprintf("├─ OUTPUTS (%d)\n", len(tx.Outputs)))
+	if len(tx.Outputs) == 0 {
+		b.WriteString("│   (No Outputs)\n")
+	}
 	for i, output := range tx.Outputs {
-		lines = append(lines, fmt.Sprintf("     Output %d:", i))
-		lines = append(lines, fmt.Sprintf("       Value:  %d", output.Value))
-		lines = append(lines, fmt.Sprintf("       Script: %x", output.PubKeyHash))
+		b.WriteString(fmt.Sprintf("│   [%d] To PubKeyHash: %.16x...\n", i, output.PubKeyHash))
+		b.WriteString(fmt.Sprintf("│       Value: %d\n", output.Value))
 	}
 
-	return strings.Join(lines, "\n")
-}
-
-func DeserializeTransaction(data []byte) Transaction {
-	/*
-		Deserializes a byte slice into a Transaction.
-	*/
-	var transaction Transaction
-
-	decoder := gob.NewDecoder(bytes.NewReader(data))
-	err := decoder.Decode(&transaction)
-	Handle(err)
-
-	return transaction
+	b.WriteString("╰" + strings.Repeat("─", 50) + "╯")
+	return b.String()
 }

@@ -9,7 +9,7 @@ import (
 	"math/big"
 )
 
-const Difficulty = 12 // Difficulty is the number of leading zero bits required in the hash
+const Difficulty = 2 // Difficulty is the number of leading zero bits required in the hash
 
 type ProofOfWork struct {
 	Block  *Block   // The block to be mined
@@ -36,6 +36,7 @@ func (pow *ProofOfWork) InitData(nonce int) []byte {
 		[][]byte{
 			pow.Block.PrevHash,
 			pow.Block.HashTransactions(), // Merkle root of transactions
+			pow.Block.HashContracts(),    // Merkle root of contracts
 			ToHex(int64(nonce)),
 			ToHex(int64(Difficulty)),
 		},
@@ -73,29 +74,32 @@ func ToHex(num int64) []byte {
 }
 
 func (pow *ProofOfWork) Run() (int, []byte) {
-	/*
-		Executes the Proof of Work algorithm to find a valid nonce and hash.
-		Returns the valid nonce and the corresponding hash.
-	*/
-	var intHash big.Int
-	var hash [32]byte
+    var intHash big.Int
+    var hash [32]byte
 
-	nonce := 0
+    nonce := 0
+    progressInterval := 100000  // Log every 100k attempts
 
-	// Iterate until a valid nonce is found or the maximum integer value is reached
-	for nonce < math.MaxInt64 {
-		data := pow.InitData(nonce) // Prepare the data with the current nonce
-		hash = sha256.Sum256(data)  // Compute the SHA-256 hash of the data
+    // Iterate until a valid nonce is found or the maximum integer value is reached
+    for nonce < math.MaxInt64 {
+        data := pow.InitData(nonce)
+        hash = sha256.Sum256(data)
 
-		intHash.SetBytes(hash[:])
+        intHash.SetBytes(hash[:])
 
-		// Check if the hash meets the target
-		if intHash.Cmp(pow.Target) == -1 {
-			break
-		} else {
-			nonce++
-		}
-	}
+        // Show progress every progressInterval attempts
+        if nonce%progressInterval == 0 && nonce > 0 {
+            log.Printf("[PoW] Mining in progress... Nonce: %d (attempts)", nonce)
+        }
 
-	return nonce, hash[:]
+        // Check if the hash meets the target
+        if intHash.Cmp(pow.Target) == -1 {
+            log.Printf("[PoW] ✓ Mining complete! Found valid nonce: %d", nonce)
+            break
+        } else {
+            nonce++
+        }
+    }
+
+    return nonce, hash[:]
 }

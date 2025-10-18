@@ -153,7 +153,7 @@ func SendBlock(addr string, b *blockchain.Block) {
 	/*
 		To send a block to a specific node in the network.
 	*/
-	data := Block{nodeAddress, b.Serialize()}
+	data := Block{nodeAddress, b.SerializeBlock()}
 	payload := GobEncode(data)
 	req := append(CommandToBytes("block"), payload...)
 
@@ -177,7 +177,7 @@ func SendTx(addr string, tnx *blockchain.Transaction) {
 	/*
 		To send a transaction to a specific node in the network.
 	*/
-	data := Tx{nodeAddress, tnx.Serialize()}
+	data := Tx{nodeAddress, tnx.SerializeTransaction()}
 	payload := GobEncode(data)
 	req := append(CommandToBytes("tx"), payload...)
 
@@ -263,7 +263,7 @@ func HandleBlock(request []byte, chain *blockchain.BlockChain) {
 	}
 
 	blockData := payload.Block
-	block := blockchain.Deserialize(blockData)
+	block := blockchain.DeserializeBlock(blockData)
 
 	log.Printf("[NETWORK] ← Received block %x (height: %d) from %s", block.Hash, block.Height, payload.AddrFrom)
 
@@ -456,7 +456,7 @@ func MineTx(chain *blockchain.BlockChain) {
 	cbTx := blockchain.CoinbaseTx(mineAddress, "")
 	txs = append(txs, cbTx)
 
-	newBlock := chain.MineBlock(txs)
+	newBlock := chain.MineBlock(txs, nil)
 	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
 	UTXOSet.Reindex()
 

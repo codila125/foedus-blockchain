@@ -12,18 +12,20 @@ type Block struct {
 	Timestamp    int64          // Timestamp of the block creation
 	Hash         []byte         // Hash of the block
 	Transactions []*Transaction // List of transactions included in the block
+	Contracts    []*Contract    // List of contracts included in the block
 	PrevHash     []byte         // Hash of the previous block
 	Nonce        int            // Nonce used for mining
 	Height       int            // Height of the block in the blockchain
 }
 
-func CreateBlock(txs []*Transaction, prevhash []byte, height int) *Block {
+func CreateBlock(txs []*Transaction, cts []*Contract, prevhash []byte, height int) *Block {
 	/*
-		Creates a new block with the given transactions and previous block hash.
+		Creates a new block with the given contracts, transactions, and previous block hash.
 	*/
 	block := &Block{
 		Timestamp:    time.Now().Unix(),
 		Transactions: txs,
+		Contracts:    cts,
 		PrevHash:     prevhash,
 		Nonce:        0,      // Nonce is the number which will be found by Proof of Work
 		Height:       height, // Height will be set when adding the block to the blockchain
@@ -48,20 +50,43 @@ func (b *Block) HashTransactions() []byte {
 	for _, tx := range b.Transactions {
 		transactions = append(transactions, tx.ID)
 	}
+	if len(transactions) == 0 {
+		return []byte{}
+	}
 	tree := NewMerkleTree(transactions) // Create a new Merkle tree from the transactions
 
 	return tree.RootNode.Data
 }
 
-func Genesis(coinbase *Transaction) *Block {
+func (b *Block) HashContracts() []byte {
 	/*
-		Creates the genesis block with a coinbase transaction.
-		'coinbase' is the coinbase transaction that rewards the miner.
+		Computes the Merkle root of the block's contracts.
+		Returns the Merkle root as a byte slice.
 	*/
-	return CreateBlock([]*Transaction{coinbase}, []byte{}, 0)
+	var contracts [][]byte
+
+	// Serialize each contract and collect them
+	for _, ct := range b.Contracts {
+		contracts = append(contracts, ct.ID)
+	}
+	if len(contracts) == 0 {
+		return []byte{}
+	}
+
+	tree := NewMerkleTree(contracts) // Create a new Merkle tree from the contracts
+
+	return tree.RootNode.Data
 }
 
-func (b *Block) Serialize() []byte {
+func Genesis(coinbase *Transaction, contractbase *Contract) *Block {
+	/*
+		Creates the genesis block with a coinbase contract.
+		'coinbase' is the coinbase contract that rewards the miner.
+	*/
+	return CreateBlock([]*Transaction{coinbase}, []*Contract{contractbase}, []byte{}, 0)
+}
+
+func (b *Block) SerializeBlock() []byte {
 	/*
 		Serializes the block into a byte slice.
 	*/
@@ -75,7 +100,7 @@ func (b *Block) Serialize() []byte {
 	return result.Bytes()
 }
 
-func Deserialize(data []byte) *Block {
+func DeserializeBlock(data []byte) *Block {
 	/*
 		Deserializes a byte slice into a Block.
 	*/

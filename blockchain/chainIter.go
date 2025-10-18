@@ -1,6 +1,5 @@
 package blockchain
 
-
 func (blockchain *BlockChain) Iterator() *BlockChainIterator {
 	/*
 		Creates and returns a new BlockChainIterator starting from the last block in the chain.
@@ -27,7 +26,7 @@ func (iter *BlockChainIterator) Next() *Block {
     blockDataCopy := make([]byte, len(blockData))
     copy(blockDataCopy, blockData)
 
-    block := Deserialize(blockDataCopy)
+    block := DeserializeBlock(blockDataCopy)
 
     // Move to the previous block for next iteration
     iter.CurrentHash = block.PrevHash

@@ -14,6 +14,52 @@ type UTXOSet struct {
 	Blockchain *BlockChain // Reference to the blockchain
 }
 
+func (blockchain *BlockChain) FindUTXO() map[string]TxOutputs {
+	/*
+		Scans the entire blockchain to find all unspent transaction outputs (UTXOs).
+		Returns a map where the key is the transaction ID and the value is the corresponding unspent outputs.
+	*/
+	UTXO := make(map[string]TxOutputs) // UTXO map to hold unspent transaction outputs
+	spentTXs := make(map[string][]int) // Map to track spent transaction outputs
+
+	iterator := blockchain.Iterator() // Create an iterator to traverse the blockchain
+
+	for {
+		block := iterator.Next() // Get the next block
+
+		for _, tx := range block.Transactions { // Iterate over each transaction in the block
+			txID := hex.EncodeToString(tx.ID) // Encode transaction ID to string
+
+		Outputs:
+			for outIdx, out := range tx.Outputs { // Iterate over each output in the transaction
+				// If the output is already spent, skip it
+				if spentTXs[txID] != nil {
+					for _, spentOut := range spentTXs[txID] {
+						if spentOut == outIdx {
+							continue Outputs
+						}
+					}
+				}
+				outs := UTXO[txID]                       // Initialize outputs for this transaction ID
+				outs.Outputs = append(outs.Outputs, out) // Add the unspent output
+				UTXO[txID] = outs                        // Update the UTXO map with the new output
+			}
+			// If the transaction is not a coinbase, mark its inputs as spent
+			if !tx.IsCoinbaseTx() {
+				for _, in := range tx.Inputs {
+					inTxID := hex.EncodeToString(in.ID)
+					spentTXs[inTxID] = append(spentTXs[inTxID], in.Out) // Mark the output as spent
+				}
+			}
+		}
+		// If we've reached the genesis block, stop iterating
+		if len(block.PrevHash) == 0 {
+			break
+		}
+	}
+	return UTXO
+}
+
 func (u *UTXOSet) Reindex() {
 	/*
 		Rebuilds the UTXO set into the database from scratch
@@ -38,7 +84,7 @@ func (u *UTXOSet) Reindex() {
 		}
 		key = append(UTXOPrefix, key...) // Prefix the key with "utxo-"
 
-		err = batch.Set(key, outs.Serialize(), nil)
+		err = batch.Set(key, outs.SerializeOutputs(), nil)
 		Handle(err)
 	}
 
@@ -61,7 +107,7 @@ func (u *UTXOSet) Update(block *Block) {
 	defer batch.Close()
 
 	for _, tx := range block.Transactions {
-		if !tx.IsCoinbase() {
+		if !tx.IsCoinbaseTx() {
 			for _, in := range tx.Inputs {
 				updatedOuts := TxOutputs{}
 				inID := append(UTXOPrefix, in.ID...) // Prefix the input transaction ID with "utxo-"
@@ -103,7 +149,7 @@ func (u *UTXOSet) Update(block *Block) {
 						log.Panic(err)
 					}
 				} else {
-					if err := batch.Set(inID, updatedOuts.Serialize(), &pebble.WriteOptions{}); err != nil {
+					if err := batch.Set(inID, updatedOuts.SerializeOutputs(), &pebble.WriteOptions{}); err != nil {
 						log.Panic(err)
 					}
 				}
@@ -118,7 +164,7 @@ func (u *UTXOSet) Update(block *Block) {
 			newOutputs.Outputs = append(newOutputs.Outputs, tx.Outputs...)
 
 			txID := append(UTXOPrefix, tx.ID...)
-			if err := batch.Set(txID, newOutputs.Serialize(), &pebble.WriteOptions{}); err != nil {
+			if err := batch.Set(txID, newOutputs.SerializeOutputs(), &pebble.WriteOptions{}); err != nil {
 				log.Panic(err)
 			}
 		}
