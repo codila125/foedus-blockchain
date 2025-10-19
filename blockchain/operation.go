@@ -5,14 +5,14 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/sha256"
-	"encoding/gob"
 	"errors"
 	"fmt"
 	"log"
 	"math/big"
 	"strings"
 	"time"
+	"encoding/hex"
+	"encoding/gob"
 
 	"github.com/codila125/foedus-blockchain/wallet"
 )
@@ -30,21 +30,6 @@ func (ct *Contract) SerializeContract() []byte {
 	}
 
 	return buff.Bytes()
-}
-
-func (ct *Contract) HashContract() []byte {
-	/*
-		Computes the hash of the contract.
-		Returns the SHA-256 hash of the serialized contract.
-	*/
-	var hash [32]byte
-
-	ctCopy := *ct
-	ctCopy.ID = []byte{}
-
-	hash = sha256.Sum256(ctCopy.SerializeContract())
-
-	return hash[:]
 }
 
 func CoinbaseOp(creator, data string) *Contract {
@@ -89,28 +74,37 @@ func (ct *Contract) IsCoinbaseOp() bool {
 	return ct.Title == "Coinbase Foedus" && len(ct.Milestones) == 0 && len(ct.Parties) == 0
 }
 
-func (blockchain *BlockChain) FindContract(contractID []byte) (Contract, error) {
-	/*
-		Finds a contract in the blockchain by its ID.
-		Returns the contract and nil error if found, otherwise returns an error.
-	*/
-	iter := blockchain.Iterator()
+func (blockchain *BlockChain) FindContract(contractID string) (Contract, error) {
+    /*
+        Finds a contract in the blockchain by its ID.
+        contractID can be either hex string or raw bytes
+        Returns the contract and nil error if found, otherwise returns an error.
+    */
+    
+    // Convert hex string to bytes for comparison
+    targetID, err := hex.DecodeString(contractID)
+    if err != nil {
+        // If it's not a valid hex string, treat it as raw bytes
+        targetID = []byte(contractID)
+    }
+    
+    iter := blockchain.Iterator()
 
-	for {
-		block := iter.Next()
+    for {
+        block := iter.Next()
 
-		for _, ct := range block.Contracts {
-			if bytes.Equal(ct.ID, contractID) {
-				return *ct, nil
-			}
-		}
+        for _, ct := range block.Contracts {
+            if bytes.Equal(ct.ID, targetID) {
+                return *ct, nil
+            }
+        }
 
-		if len(block.PrevHash) == 0 {
-			break
-		}
-	}
+        if len(block.PrevHash) == 0 {
+            break
+        }
+    }
 
-	return Contract{}, errors.New("Contract not found")
+    return Contract{}, errors.New("Contract not found")
 }
 
 func (ct *Contract) SignContract(privKey *ecdsa.PrivateKey, partyAddress []byte) error {
@@ -275,12 +269,6 @@ func (ct *Contract) VerifyContractSignature(partyAddress []byte, pubKeyBytes []b
 
 	// Verify signature
 	isValid := ecdsa.Verify(pubKey, contractHash, r, s)
-
-	if !isValid {
-		log.Printf("[CONTRACT] ✗ Invalid signature for party: %x", partyAddress)
-	} else {
-		log.Printf("[CONTRACT] ✓ Valid signature verified for party: %x", partyAddress)
-	}
 
 	return isValid
 }

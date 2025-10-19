@@ -47,7 +47,7 @@ func (cli *CommandLine) printContractWithBox(contract *blockchain.Contract, cont
 		Prints a single contract with a nicely formatted box.
 	*/
 	fmt.Printf("║   ┌─ Contract #%d ────────────────────────────────────────┐\n", contractNumber)
-	fmt.Printf("║   │ ╭─── CONTRACT [%.16x...] ───╮\n", contract.ID)
+	fmt.Printf("║   │ ╭─── CONTRACT [%.32x] ───╮\n", contract.ID)
 	fmt.Printf("║   │ │ Title: %s\n", contract.Title)
 	fmt.Printf("║   │ │ Status: %s\n", contract.Status)
 	fmt.Printf("║   │ │ Creator: %s\n", contract.CreatorAddress)
@@ -99,7 +99,7 @@ func (cli *CommandLine) printTransactionWithBox(tx *blockchain.Transaction, txNu
 		Prints a single transaction with a nicely formatted box.
 	*/
 	fmt.Printf("║   ┌─ Transaction #%d ──────────────────────────────────────┐\n", txNumber)
-	fmt.Printf("║   │ ╭─── TRANSACTION [%.16x...] ───╮\n", tx.ID)
+	fmt.Printf("║   │ ╭─── TRANSACTION [%.32x] ───╮\n", tx.ID)
 
 	// Inputs Section
 	fmt.Printf("║   │ ├─ INPUTS (%d)\n", len(tx.Inputs))

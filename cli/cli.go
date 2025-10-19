@@ -29,6 +29,7 @@ func (cli *CommandLine) printUsage() {
 	fmt.Println(" reindexutxo : rebuilds the UTXO set")
 	fmt.Println(" startnode -miner <ADDRESS> : starts a node with ID specified in NODE_ID env. var. -miner enables mining")
 	fmt.Println(" createcontract -title <TITLE> -creator <CREATOR_ADDRESS> -description <DESCRIPTION> -parties <PARTY_ADDRESSES> : creates a new contract")
+	fmt.Println(" approvecontract -contractid <CONTRACT_ID> -approver <APPROVER_ADDRESS> : approves an existing contract")
 }
 
 func (cli *CommandLine) validateArgs() {
@@ -102,10 +103,10 @@ func (cli *CommandLine) createBlockChain(address string, nodeID string) {
 
 	log.Printf("[CLI] Creating new blockchain for address: %s", address)
 	chain := blockchain.NewBlockChain(address, nodeID) // Create a new blockchain with the genesis block
-	chain.Database.Close()                             // Close the database connection
-
+	
 	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
 	UTXOSet.Reindex() // Rebuild the UTXO set from the blockchain
+	chain.Database.Close()                             // Close the database connection
 
 	log.Printf("[CLI] ✓ Blockchain created successfully")
 }
@@ -160,12 +161,12 @@ func (cli *CommandLine) createContract(title, description, creator, parties, nod
 	if err != nil {
 		log.Panic(err)
 	}
-	wallet := wallets.GetWallet(creator) // Get the wallet for the creator's address
+	wallet := wallets.GetWallet(creator)      // Get the wallet for the creator's address
 	partywallet := wallets.GetWallet(parties) // Get the wallet for the party's address
 
 	party := &blockchain.Party{
-		Address: string(partywallet.Address()),
-		Role:    "CONTRACTOR",
+		Address:   string(partywallet.Address()),
+		Role:      "CONTRACTOR",
 		PublicKey: partywallet.PublicKey,
 		Signature: []byte{},
 	}
@@ -178,6 +179,45 @@ func (cli *CommandLine) createContract(title, description, creator, parties, nod
 	UTXOSet.Update(newBlock)              // Update the UTXO set with the new block
 
 	log.Printf("[CLI] ✓ Contract created in block %x", newBlock.Hash)
+}
+
+func (cli *CommandLine) approveContract(contractID, approverAddress, nodeID string) {
+	/*
+		Approves an existing contract on the blockchain by adding the approver's signature.
+	*/
+	// Validate the approver's address
+	if !wallet.ValidateAddress(approverAddress) {
+		log.Panic("[CLI] Invalid approver address")
+	}
+
+	log.Printf("[CLI] Approving contract: %s", contractID)
+
+	// Load the existing blockchain and UTXO set
+	chain := blockchain.ContinueBlockChain(nodeID)
+	defer chain.Database.Close()
+	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
+	UTXOSet.Reindex()
+
+	wallets, err := wallet.CreateWallets(nodeID) // Load existing wallets
+	if err != nil {
+		log.Panic(err)
+	}
+
+	contract, err := chain.FindContract(contractID)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	wallet := wallets.GetWallet(approverAddress) // Get the wallet for the approver's address
+
+	err = contract.ApproveContract(&wallet)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	cts := []*blockchain.Contract{&contract}    // Include the approved contract in the new block
+	newBlock := chain.MineBlock(nil, cts)	  // Mine a new block with the approved contract
+	UTXOSet.Update(newBlock)                   // Update the UTXO set with the new block
 }
 
 func (cli *CommandLine) send(from, to string, amount int, nodeID string, mineNow bool) {
@@ -270,6 +310,7 @@ func (cli *CommandLine) Run() {
 	reindexUTXOCmd := flag.NewFlagSet("reindexutxo", flag.ExitOnError)
 	startNodeCmd := flag.NewFlagSet("startnode", flag.ExitOnError)
 	createContractCmd := flag.NewFlagSet("createcontract", flag.ExitOnError)
+	approveContractCmd := flag.NewFlagSet("approvecontract", flag.ExitOnError)
 
 	createBlockchainAddress := createBlockchainCmd.String("address", "", "The address to send genesis block reward to")
 	getBalanceAddress := getBalanceCmd.String("address", "", "The address to get balance for")
@@ -282,6 +323,8 @@ func (cli *CommandLine) Run() {
 	createContractDescription := createContractCmd.String("description", "", "The description of the contract")
 	createContractCreator := createContractCmd.String("creator", "", "The address of the contract creator")
 	createContractParties := createContractCmd.String("parties", "", "The addresses of the contract parties")
+	approveContractID := approveContractCmd.String("contractid", "", "The ID of the contract to approve")
+	approveContractApprover := approveContractCmd.String("approver", "", "The address of the approver")
 
 	switch os.Args[1] {
 	case "reindexutxo":
@@ -326,6 +369,11 @@ func (cli *CommandLine) Run() {
 		}
 	case "createcontract":
 		err := createContractCmd.Parse(os.Args[2:])
+		if err != nil {
+			log.Panic(err)
+		}
+	case "approvecontract":
+		err := approveContractCmd.Parse(os.Args[2:])
 		if err != nil {
 			log.Panic(err)
 		}
@@ -388,5 +436,13 @@ func (cli *CommandLine) Run() {
 			runtime.Goexit()
 		}
 		cli.createContract(*createContractTitle, *createContractDescription, *createContractCreator, *createContractParties, nodeID)
+	}
+
+	if approveContractCmd.Parsed() {
+		if *approveContractID == "" || *approveContractApprover == "" {
+			approveContractCmd.Usage()
+			runtime.Goexit()
+		}
+		cli.approveContract(*approveContractID, *approveContractApprover, nodeID)
 	}
 }

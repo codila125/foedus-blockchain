@@ -75,7 +75,6 @@ func (u *UTXOSet) Reindex() {
 	UTXOs := u.Blockchain.FindUTXO() // Find all unspent transaction outputs in the blockchain
 
 	batch := db.NewBatch()
-	defer batch.Close()
 
 	for txID, outs := range UTXOs { // Iterate over each transaction ID and its outputs
 		key, err := hex.DecodeString(txID)
@@ -89,6 +88,7 @@ func (u *UTXOSet) Reindex() {
 	}
 
 	err := db.Apply(batch, &pebble.WriteOptions{Sync: true})
+	batch.Close()
 	Handle(err)
 
 	count := u.CountTransactions()
@@ -104,7 +104,6 @@ func (u *UTXOSet) Update(block *Block) {
 	db := u.Blockchain.Database.GetRawDB()
 
 	batch := db.NewBatch()
-	defer batch.Close()
 
 	for _, tx := range block.Transactions {
 		if !tx.IsCoinbaseTx() {
@@ -173,6 +172,7 @@ func (u *UTXOSet) Update(block *Block) {
 	if err := db.Apply(batch, pebble.Sync); err != nil {
 		log.Panic(err)
 	}
+	batch.Close()
 
 	log.Printf("[UTXO] UTXO set updated successfully")
 }
@@ -205,7 +205,6 @@ func (u *UTXOSet) DeleteByPrefix(prefix []byte) {
 		if keysCollected == collectSize {
 			// Delete collected keys in batch
 			batch := db.NewBatch()
-			defer batch.Close()
 
 			for _, delKey := range keysForDelete {
 				if err := batch.Delete(delKey, nil); err != nil {
@@ -216,6 +215,7 @@ func (u *UTXOSet) DeleteByPrefix(prefix []byte) {
 			if err := db.Apply(batch, &pebble.WriteOptions{Sync: true}); err != nil {
 				log.Panic(err)
 			}
+			batch.Close()
 
 			keysForDelete = make([][]byte, 0, collectSize) // Reset the slice for the next batch
 			keysCollected = 0
@@ -225,7 +225,6 @@ func (u *UTXOSet) DeleteByPrefix(prefix []byte) {
 	// Delete any remaining keys that didn't make up a full batch
 	if keysCollected > 0 {
 		batch := db.NewBatch()
-		defer batch.Close()
 
 		for _, delKey := range keysForDelete {
 			if err := batch.Delete(delKey, nil); err != nil {
@@ -236,6 +235,7 @@ func (u *UTXOSet) DeleteByPrefix(prefix []byte) {
 		if err := db.Apply(batch, &pebble.WriteOptions{Sync: true}); err != nil {
 			log.Panic(err)
 		}
+		batch.Close()
 	}
 }
 
