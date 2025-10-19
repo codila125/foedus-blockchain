@@ -13,7 +13,6 @@ const (
 	ContractDraft     ContractStatus = "DRAFT"
 	ContractActive    ContractStatus = "ACTIVE"
 	ContractCompleted ContractStatus = "COMPLETED"
-	ContractDisputed  ContractStatus = "DISPUTED"
 	ContractCancelled ContractStatus = "CANCELLED"
 )
 
@@ -69,7 +68,6 @@ type Party struct {
 type ContractRole string
 
 const (
-	RoleClient     ContractRole = "CLIENT"
 	RoleContractor ContractRole = "CONTRACTOR"
 	RoleArbitrator ContractRole = "ARBITRATOR"
 	RoleCreator    ContractRole = "CREATOR"
@@ -102,31 +100,7 @@ type MilestoneCore struct {
     Title       string
     Description string
     Value       int
-    DueDate     int64
 	CreatedAt   int64
-}
-
-type ContractOpType string
-
-const (
-	OpCreateContract    ContractOpType = "CREATE_CONTRACT"
-	OpApproveContract   ContractOpType = "APPROVE_CONTRACT"
-	OpCompleteMilestone ContractOpType = "COMPLETE_MILESTONE"
-	OpApproveMilestone  ContractOpType = "APPROVE_MILESTONE"
-	OpRejectMilestone   ContractOpType = "DISPUTE_MILESTONE"
-	OpResolveDispute    ContractOpType = "RESOLVE_DISPUTE"
-	OpCancelContract    ContractOpType = "CANCEL_CONTRACT"
-)
-
-type ContractOperation struct {
-	ID          []byte         // Operation ID
-	Type        ContractOpType // Type of operation
-	ContractID  []byte         // Related contract ID
-	MilestoneID []byte         // Related milestone ID (if applicable)
-	Actor       string         // Address executing the operation
-	Timestamp   int64          // When operation occurred
-	Signature   []byte         // Digital signature
-	Data        []byte         // Additional operation data
 }
 
 // SerializeContractCore serializes the immutable core of the contract into a byte array.
@@ -162,7 +136,6 @@ func (ct *Contract) HashContract() []byte {
             Title:       m.Title,
             Description: m.Description,
             Value:       m.Value,
-            DueDate:     m.DueDate,
         }
     }
 

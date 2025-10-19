@@ -176,6 +176,7 @@ func (u *UTXOSet) Update(block *Block) {
 
 	log.Printf("[UTXO] UTXO set updated successfully")
 }
+
 func (u *UTXOSet) DeleteByPrefix(prefix []byte) {
 	/*
 		Delete all UTXO entries with the given prefix in chunks

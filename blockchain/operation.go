@@ -5,14 +5,14 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"encoding/gob"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
 	"math/big"
 	"strings"
 	"time"
-	"encoding/hex"
-	"encoding/gob"
 
 	"github.com/codila125/foedus-blockchain/wallet"
 )
@@ -75,36 +75,48 @@ func (ct *Contract) IsCoinbaseOp() bool {
 }
 
 func (blockchain *BlockChain) FindContract(contractID string) (Contract, error) {
-    /*
-        Finds a contract in the blockchain by its ID.
-        contractID can be either hex string or raw bytes
-        Returns the contract and nil error if found, otherwise returns an error.
-    */
-    
-    // Convert hex string to bytes for comparison
-    targetID, err := hex.DecodeString(contractID)
-    if err != nil {
-        // If it's not a valid hex string, treat it as raw bytes
-        targetID = []byte(contractID)
-    }
-    
-    iter := blockchain.Iterator()
+	/*
+	   Finds a contract in the blockchain by its ID.
+	   First checks the ICCT set for incomplete contracts (fast lookup),
+	   then falls back to blockchain scan if not found.
+	   contractID can be either hex string or raw bytes
+	   Returns the contract and nil error if found, otherwise returns an error.
+	*/
 
-    for {
-        block := iter.Next()
+	// Convert hex string to bytes for comparison
+	targetID, err := hex.DecodeString(contractID)
+	if err != nil {
+		// If it's not a valid hex string, treat it as raw bytes
+		targetID = []byte(contractID)
+	}
 
-        for _, ct := range block.Contracts {
-            if bytes.Equal(ct.ID, targetID) {
-                return *ct, nil
-            }
-        }
+	// First, try to find in ICCT set (fast lookup for incomplete contracts)
+	icctSet := ICCTSet{blockchain}
+	contract, err := icctSet.GetContract(targetID)
+	if err == nil && contract != nil {
+		log.Printf("[CONTRACT] Contract %x found in ICCT set - Status: %s", targetID, contract.Status)
+		return *contract, nil
+	}
 
-        if len(block.PrevHash) == 0 {
-            break
-        }
-    }
+	// If not in ICCT, scan the entire blockchain (for completed/cancelled contracts)
+	log.Printf("[CONTRACT] Contract %x not in ICCT set, scanning blockchain", targetID)
+	iter := blockchain.Iterator()
 
-    return Contract{}, errors.New("Contract not found")
+	for {
+		block := iter.Next()
+
+		for _, ct := range block.Contracts {
+			if bytes.Equal(ct.ID, targetID) {
+				return *ct, nil
+			}
+		}
+
+		if len(block.PrevHash) == 0 {
+			break
+		}
+	}
+
+	return Contract{}, errors.New("Contract not found")
 }
 
 func (ct *Contract) SignContract(privKey *ecdsa.PrivateKey, partyAddress []byte) error {

@@ -135,7 +135,6 @@ func (blockchain *BlockChain) MineBlock(transactions []*Transaction, contracts [
 		}
 	}
 
-
 	db := blockchain.Database.GetRawDB()
 
 	// Get the last hash from the database
@@ -175,6 +174,9 @@ func (blockchain *BlockChain) MineBlock(transactions []*Transaction, contracts [
 
 	utxoSet := UTXOSet{blockchain}
 	utxoSet.Update(newBlock)
+
+	icctSet := ICCTSet{blockchain}
+	icctSet.Update(newBlock)
 
 	return newBlock
 }

@@ -26,7 +26,7 @@ func (cli *CommandLine) printUsage() {
 	fmt.Println(" send -from <FROM> -to <TO> -amount <AMOUNT> -mine : send amount of coins from address to address")
 	fmt.Println(" createwallet : creates a new Wallet")
 	fmt.Println(" listaddresses : lists the addresses in our wallet file")
-	fmt.Println(" reindexutxo : rebuilds the UTXO set")
+	fmt.Println(" reindex : rebuilds the UTXO and ICCT sets")
 	fmt.Println(" startnode -miner <ADDRESS> : starts a node with ID specified in NODE_ID env. var. -miner enables mining")
 	fmt.Println(" createcontract -title <TITLE> -creator <CREATOR_ADDRESS> -description <DESCRIPTION> -parties <PARTY_ADDRESSES> : creates a new contract")
 	fmt.Println(" approvecontract -contractid <CONTRACT_ID> -approver <APPROVER_ADDRESS> : approves an existing contract")
@@ -103,10 +103,14 @@ func (cli *CommandLine) createBlockChain(address string, nodeID string) {
 
 	log.Printf("[CLI] Creating new blockchain for address: %s", address)
 	chain := blockchain.NewBlockChain(address, nodeID) // Create a new blockchain with the genesis block
-	
+
 	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
 	UTXOSet.Reindex() // Rebuild the UTXO set from the blockchain
-	chain.Database.Close()                             // Close the database connection
+
+	ICCTSet := blockchain.ICCTSet{Blockchain: chain}
+	ICCTSet.Reindex() // Rebuild the ICCT set from the blockchain
+
+	chain.Database.Close() // Close the database connection
 
 	log.Printf("[CLI] ✓ Blockchain created successfully")
 }
@@ -125,6 +129,10 @@ func (cli *CommandLine) getBalance(address string, nodeID string) {
 	chain := blockchain.ContinueBlockChain(nodeID) // Load the existing blockchain
 	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
 	UTXOSet.Reindex() // Rebuild the UTXO set
+
+	ICCTSet := blockchain.ICCTSet{Blockchain: chain}
+	ICCTSet.Reindex() // Rebuild the ICCT set
+
 	defer chain.Database.Close()
 
 	balance := 0
@@ -157,6 +165,9 @@ func (cli *CommandLine) createContract(title, description, creator, parties, nod
 	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
 	UTXOSet.Reindex()
 
+	ICCTSet := blockchain.ICCTSet{Blockchain: chain}
+	ICCTSet.Reindex()
+
 	wallets, err := wallet.CreateWallets(nodeID) // Load existing wallets
 	if err != nil {
 		log.Panic(err)
@@ -174,11 +185,10 @@ func (cli *CommandLine) createContract(title, description, creator, parties, nod
 	// Create a new contract transaction
 	ct := blockchain.CreateContract(title, description, &wallet, nil, []*blockchain.Party{party}, nil, "")
 
-	cts := []*blockchain.Contract{ct}     // Include the contract transaction in the new block
-	newBlock := chain.MineBlock(nil, cts) // Mine a new block with the contract transaction
-	UTXOSet.Update(newBlock)              // Update the UTXO set with the new block
+	cts := []*blockchain.Contract{ct}  // Include the contract transaction in the new block
+	block := chain.MineBlock(nil, cts) // Mine a new block with the contract transaction
 
-	log.Printf("[CLI] ✓ Contract created in block %x", newBlock.Hash)
+	log.Printf("[CLI] ✓ Contract created in block %x", block.Hash)
 }
 
 func (cli *CommandLine) approveContract(contractID, approverAddress, nodeID string) {
@@ -198,6 +208,9 @@ func (cli *CommandLine) approveContract(contractID, approverAddress, nodeID stri
 	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
 	UTXOSet.Reindex()
 
+	ICCTSet := blockchain.ICCTSet{Blockchain: chain}
+	ICCTSet.Reindex()
+
 	wallets, err := wallet.CreateWallets(nodeID) // Load existing wallets
 	if err != nil {
 		log.Panic(err)
@@ -215,9 +228,11 @@ func (cli *CommandLine) approveContract(contractID, approverAddress, nodeID stri
 		log.Panic(err)
 	}
 
-	cts := []*blockchain.Contract{&contract}    // Include the approved contract in the new block
-	newBlock := chain.MineBlock(nil, cts)	  // Mine a new block with the approved contract
-	UTXOSet.Update(newBlock)                   // Update the UTXO set with the new block
+	cts := []*blockchain.Contract{&contract} // Include the approved contract in the new block
+
+	chain.MineBlock(nil, cts)                // Mine a new block with the approved contract
+
+	log.Printf("[CLI] ✓ Contract %s approved", contractID)
 }
 
 func (cli *CommandLine) send(from, to string, amount int, nodeID string, mineNow bool) {
@@ -241,6 +256,9 @@ func (cli *CommandLine) send(from, to string, amount int, nodeID string, mineNow
 	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
 	UTXOSet.Reindex()
 
+	ICCTSet := blockchain.ICCTSet{Blockchain: chain}
+	ICCTSet.Reindex()
+
 	wallets, err := wallet.CreateWallets(nodeID) // Load existing wallets
 	if err != nil {
 		log.Panic(err)
@@ -263,18 +281,23 @@ func (cli *CommandLine) send(from, to string, amount int, nodeID string, mineNow
 	}
 }
 
-func (cli *CommandLine) reindexUTXO(nodeID string) {
+func (cli *CommandLine) reindex(nodeID string) {
 	/*
-		Rebuilds the UTXO set from the current state of the blockchain.
+		Rebuilds the UTXO set and ICCT set from the current state of the blockchain.
 	*/
-	log.Printf("[CLI] Starting UTXO reindex operation")
+	log.Printf("[CLI] Starting UTXO and ICCT reindex operation")
 	chain := blockchain.ContinueBlockChain(nodeID) // Load the existing blockchain
 	defer chain.Database.Close()
+
 	UTXOSet := blockchain.UTXOSet{Blockchain: chain} // Create a UTXO set instance
 	UTXOSet.Reindex()                                // Rebuild the UTXO set
-
-	count := UTXOSet.CountTransactions() // Count the number of transactions in the UTXO set
+	count := UTXOSet.CountTransactions()             // Count the number of transactions in the UTXO set
 	log.Printf("[CLI] ✓ UTXO reindex complete - %d transaction(s) in set", count)
+
+	ICCTSet := blockchain.ICCTSet{Blockchain: chain} // Create an ICCT set instance
+	ICCTSet.Reindex()                                // Rebuild the ICCT set
+	contractCount := ICCTSet.CountContracts()        // Count the number of contracts in the ICCT set
+	log.Printf("[CLI] ✓ ICCT reindex complete - %d incomplete contract(s) in set", contractCount)
 }
 
 func (cli *CommandLine) startNode(nodeID string, minerAddress string) {
@@ -307,7 +330,7 @@ func (cli *CommandLine) Run() {
 	printChainCmd := flag.NewFlagSet("printchain", flag.ExitOnError)
 	createWalletCmd := flag.NewFlagSet("createwallet", flag.ExitOnError)
 	listAddressesCmd := flag.NewFlagSet("listaddresses", flag.ExitOnError)
-	reindexUTXOCmd := flag.NewFlagSet("reindexutxo", flag.ExitOnError)
+	reindexCmd := flag.NewFlagSet("reindex", flag.ExitOnError)
 	startNodeCmd := flag.NewFlagSet("startnode", flag.ExitOnError)
 	createContractCmd := flag.NewFlagSet("createcontract", flag.ExitOnError)
 	approveContractCmd := flag.NewFlagSet("approvecontract", flag.ExitOnError)
@@ -327,8 +350,8 @@ func (cli *CommandLine) Run() {
 	approveContractApprover := approveContractCmd.String("approver", "", "The address of the approver")
 
 	switch os.Args[1] {
-	case "reindexutxo":
-		err := reindexUTXOCmd.Parse(os.Args[2:])
+	case "reindex":
+		err := reindexCmd.Parse(os.Args[2:])
 		if err != nil {
 			log.Panic(err)
 		}
@@ -408,8 +431,8 @@ func (cli *CommandLine) Run() {
 	if listAddressesCmd.Parsed() {
 		cli.listAddresses(nodeID)
 	}
-	if reindexUTXOCmd.Parsed() {
-		cli.reindexUTXO(nodeID)
+	if reindexCmd.Parsed() {
+		cli.reindex(nodeID)
 	}
 
 	if sendCmd.Parsed() {
