@@ -48,10 +48,11 @@ func (cli *CommandLine) listAddresses(nodeID string) {
 		Lists all wallet addresses stored in the wallet file.
 	*/
 	wallets, _ := wallet.CreateWallets(nodeID)
-	addresses := wallets.GetAllAddresses()
+	log.Printf("[CLI] Listing all wallet addresses:")
 
+	addresses := wallets.GetAllAddresses()
 	for _, address := range addresses {
-		fmt.Println(address)
+		log.Printf("[CLI] - %s\n", address)
 	}
 }
 

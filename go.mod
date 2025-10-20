@@ -4,6 +4,7 @@ go 1.25.1
 
 require (
 	github.com/cockroachdb/pebble v1.1.5
+	github.com/go-chi/chi/v5 v5.2.3
 	github.com/mr-tron/base58 v1.2.0
 	github.com/vrecan/death/v3 v3.0.3
 )
