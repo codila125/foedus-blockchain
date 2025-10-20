@@ -14,8 +14,9 @@ func RegisterRoutes(handler *handler.Handler) *chi.Mux {
 	r = chi.NewRouter()
 
 	r.Route("/blockchain", func(r chi.Router) {
-		r.Post("/createwallet", handler.CreateWallet)
-		r.Post("/listaddresses", handler.ListAddresses)
+		r.Get("/createwallet", handler.CreateWallet)
+		r.Get("/listaddresses", handler.ListAddresses)
+		r.Get("/printchain", handler.PrintChain)
 	})
 	return r
 }

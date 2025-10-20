@@ -1,8 +1,10 @@
 package server
 
 import (
-	"log"
 	"context"
+	"log"
+
+	"github.com/codila125/foedus-blockchain/blockchain"
 	"github.com/codila125/foedus-blockchain/wallet"
 )
 
@@ -17,7 +19,10 @@ func NewServer(port string) *Server {
 }
 
 func (s *Server) CreateWallet(ctx context.Context) (string, error) {
-	wallets, _ := wallet.CreateWallets(s.port)
+	wallets, err := wallet.CreateWallets(s.port)
+	if err != nil {
+		return "", err
+	}
 	address := wallets.AddWallet()
 	wallets.SaveFile(s.port)
 	
@@ -26,10 +31,32 @@ func (s *Server) CreateWallet(ctx context.Context) (string, error) {
 }
 
 func (s *Server) ListAddresses(ctx context.Context) ([]string, error) {
-	wallets, _ := wallet.CreateWallets(s.port)
+	wallets, err := wallet.CreateWallets(s.port)
+	if err != nil {
+		return nil, err
+	}
 	addresses := wallets.GetAllAddresses()
 
-	log.Printf("[SERVER] Listing all wallet addresses:")
+	log.Printf("[SERVER] Listed all wallet addresses")
 
 	return addresses, nil
+}
+
+func (s *Server) PrintChain(ctx context.Context) ([]*BlockRes) {
+
+	chain := blockchain.ContinueBlockChain(s.port)
+	defer chain.Database.Close()
+	iterator := chain.Iterator()
+
+	var blocks []*BlockRes
+	for {
+		block := iterator.Next()
+		blocks = append(blocks, BlockResponse(block))
+		if len(block.PrevHash) == 0 {
+			break
+		}
+	}
+	log.Printf("[SERVER] Served the blockchain successfully")
+
+	return blocks
 }
