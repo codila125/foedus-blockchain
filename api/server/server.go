@@ -3,18 +3,26 @@ package server
 import (
 	"context"
 	"log"
+	"os"
+	"runtime"
+	"syscall"
 
+	"github.com/vrecan/death/v3"
 	"github.com/codila125/foedus-blockchain/blockchain"
 	"github.com/codila125/foedus-blockchain/wallet"
 )
 
 type Server struct {
-	port string
+	port  string
+	chain *blockchain.BlockChain
 }
 
 func NewServer(port string) *Server {
+	chain := blockchain.ContinueBlockChain(port)
+	go CloseDB(chain)
 	return &Server{
-		port: port,
+		port:  port,
+		chain: chain,
 	}
 }
 
@@ -43,10 +51,7 @@ func (s *Server) ListAddresses(ctx context.Context) ([]string, error) {
 }
 
 func (s *Server) PrintChain(ctx context.Context) ([]*BlockRes) {
-
-	chain := blockchain.ContinueBlockChain(s.port)
-	defer chain.Database.Close()
-	iterator := chain.Iterator()
+	iterator := s.chain.Iterator()
 
 	var blocks []*BlockRes
 	for {
@@ -62,11 +67,7 @@ func (s *Server) PrintChain(ctx context.Context) ([]*BlockRes) {
 }
 
 func (s *Server) GetBalance(ctx context.Context, address string) (int, error) {
-	
-	chain := blockchain.ContinueBlockChain(s.port)
-	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
-
-	defer chain.Database.Close()
+	UTXOSet := blockchain.UTXOSet{Blockchain: s.chain}
 
 	balance := 0
 	pubKeyHash := wallet.Base58Decode([]byte(address))
@@ -80,4 +81,21 @@ func (s *Server) GetBalance(ctx context.Context, address string) (int, error) {
 	log.Printf("[SERVER] Retrieved balance for address %s: %d", address, balance)
 
 	return balance, nil
+}
+
+func CloseDB(chain *blockchain.BlockChain) {
+	/*
+		If a termination signal is received, this function ensures that the
+		blockchain database is properly closed before exiting the program.
+		Termination signals like SIGINT (Ctrl+C) and SIGTERM are handled.
+	*/
+	d := death.NewDeath(syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
+
+	d.WaitForDeathWithFunc(func() {
+		defer os.Exit(1)       // Exit with a non-zero status to indicate termination
+		defer runtime.Goexit() // Ensure all goroutines are terminated
+		log.Printf("[SERVER] Shutting down node, closing database...")
+		chain.Database.Close() // Close the blockchain database
+		log.Printf("[SERVER] Database closed successfully")
+	})
 }
