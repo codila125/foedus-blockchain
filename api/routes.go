@@ -21,6 +21,7 @@ func RegisterRoutes(handler *handler.Handler) *chi.Mux {
 		r.Post("/createcontract/{address}", handler.CreateContract)
 		r.Get("/approvecontract/{address}/{contractID}", handler.ApproveContract)
 		r.Get("/getcontract/{contractID}", handler.GetContract)
+		r.Post("/approvemilestone/{contractID}/{milestoneID}/{address}", handler.ApproveMilestone)
 	})
 	return r
 }

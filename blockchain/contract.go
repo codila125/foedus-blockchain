@@ -21,7 +21,6 @@ type MilestoneStatus string
 const (
 	MilestoneActive   MilestoneStatus = "ACTIVE"
 	MilestoneCompleted MilestoneStatus = "COMPLETED"
-	MilestoneRejected  MilestoneStatus = "DISPUTED"
 	MilestoneCancelled MilestoneStatus = "CANCELLED"
 )
 
@@ -37,7 +36,6 @@ type Milestone struct {
 	CompletedAt int64           // Completion timestamp (0 if not completed)
 	Evidence    []byte          // Hash of evidence/deliverables (IPFS hash, etc.)
 	ApprovedBy  []string        // Addresses of parties who approved the milestone
-	DisputedBy  []string        // Addresses of parties who disputed the milestone
 }
 
 // Contract represents an agreement between parties with milestone-based payments
@@ -78,7 +76,6 @@ type ContractCore struct {
     Milestones     []*MilestoneCore // Use a core version of Milestone
     Parties        []*PartyCore     // Use a core version of Party
 	Terms      []byte
-    DisputeHandler string
     CreatorAddress string
 	Attachments    [][]byte       // Array of attachment hashes (IPFS hashes, etc.)
 }

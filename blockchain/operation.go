@@ -452,6 +452,99 @@ func (contract *Contract) ApproveContract(wallet *wallet.Wallet) error {
 	return nil
 }
 
+func (contract *Contract) ApproveMilestone(wallet *wallet.Wallet, milestoneID []byte, evidence []byte) (*Contract, error) {
+	/*
+		Approves the milestone by verifying the party's signature.
+	*/
+
+	if contract.IsCoinbaseOp() {
+		return nil, fmt.Errorf("[MILESTONE] ✗ Coinbase contract has no milestones")
+	}
+
+	if contract.Status != ContractActive {
+		log.Printf("[MILESTONE] ✗ Cannot approve milestone in contract %x - invalid contract status: %s", contract.ID, contract.Status)
+		return nil, fmt.Errorf("[MILESTONE] ✗ Cannot approve milestone - invalid contract status: %s", contract.Status)
+	}
+
+	milestone, err := contract.GetMilestoneByID(milestoneID)
+	if err != nil {
+		log.Printf("[MILESTONE] ✗ Milestone %x not found in contract %x", milestoneID, contract.ID)
+		return nil, fmt.Errorf("[MILESTONE] ✗ Milestone %x not found in contract %x", milestoneID, contract.ID)
+	}
+	
+	if milestone.Status == MilestoneCompleted || milestone.Status == MilestoneCancelled {
+		log.Printf("[MILESTONE] ✗ Cannot approve milestone %x - invalid status: %s", milestone.ID, milestone.Status)
+		return nil, fmt.Errorf("[MILESTONE] Cannot approve milestone - invalid status: %s", milestone.Status)
+	}
+
+	if milestone.PartyApproved(string(wallet.Address())) {
+		log.Printf("[MILESTONE] ✓ Party %x has already approved the milestone %x", wallet.Address(), milestone.ID)
+		return contract, nil
+	}
+
+	if evidence != nil {
+		milestone.Evidence = evidence
+	}
+
+	milestone.ApprovedBy = append(milestone.ApprovedBy, string(wallet.Address()))
+
+	if len(milestone.ApprovedBy) == len(contract.Parties) {
+		milestone.Status = MilestoneCompleted
+		milestone.CompletedAt = time.Now().Unix()
+		contract.UpdatedAt = time.Now().Unix()
+		log.Printf("[MILESTONE] ✓ Milestone %x completed - all parties approved", milestone.ID)
+	} else {
+		pendingApprovals := len(contract.Parties) - len(milestone.ApprovedBy)
+		log.Printf("[MILESTONE] ⧗ Milestone %x approved by party %x - %d more approvals needed", milestone.ID, wallet.Address(), pendingApprovals)
+	}
+
+	if contract.AllMilestonesCompleted() {
+		contract.Status = ContractCompleted
+		contract.UpdatedAt = time.Now().Unix()
+		log.Printf("[CONTRACT] ✓ Contract %x completed - all milestones completed", contract.ID)
+	}
+
+	return contract, nil
+}
+
+func (contract *Contract) GetMilestoneByID(milestoneID []byte) (*Milestone, error) {
+	/*
+		Retrieves a milestone from the contract by its ID.
+		Returns the milestone and nil error if found, otherwise returns an error.
+	*/
+	for _, milestone := range contract.Milestones {
+		if bytes.Equal(milestone.ID, milestoneID) {
+			return milestone, nil
+		}
+	}
+	return nil, errors.New("Milestone not found")
+}
+
+func (milestone *Milestone) PartyApproved(address string) bool {
+	/*
+		Checks if a specific party has approved the milestone.
+	*/
+	for _, approver := range milestone.ApprovedBy {
+		if address == approver {
+			return true
+		}
+	}
+	return false
+}
+
+func (contract *Contract) AllMilestonesCompleted() bool {
+	/*
+		Checks if all milestones in the contract are completed.
+		Returns true only if every milestone has status MilestoneCompleted.
+	*/
+	for _, milestone := range contract.Milestones {
+		if milestone.Status != MilestoneCompleted {
+			return false
+		}
+	}
+	return true
+}
+
 func (contract Contract) String() string {
 	/*
 		Returns a string representation of the contract.

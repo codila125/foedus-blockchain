@@ -143,3 +143,37 @@ func (h *Handler) ApproveContract(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(contract)
 	
 }
+
+func (h *Handler) ApproveMilestone(w http.ResponseWriter, r *http.Request) {
+	contractID := chi.URLParam(r, "contractID")
+	milestoneID := chi.URLParam(r, "milestoneID")
+	approver := chi.URLParam(r, "address")
+	if !wallet.ValidateAddress(approver) {
+		http.Error(w, "Invalid approver address: "+approver, http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Evidence string `json:"evidence"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	err := h.server.ApproveMilestone(h.ctx, contractID, milestoneID, approver, []byte(req.Evidence))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	contract, err := h.server.ContractStatus(h.ctx, contractID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(contract)
+}

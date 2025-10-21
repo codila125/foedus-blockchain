@@ -38,14 +38,13 @@ type BlockTransactionOutputRes struct {
 }
 
 type CreateContractReq struct {
-	Title          string            `json:"title"`
-	Description    string            `json:"description"`
-	Creator        string            `json:"creator"`
-	Milestones     []AddMilestoneReq `json:"milestones"`
-	Parties        []AddPartyReq     `json:"parties"`
-	Terms          string            `json:"terms"`
-	DisputeHandler string            `json:"dispute_handler"`
-	Attachments    [][]byte          `json:"attachments"`
+	Title       string            `json:"title"`
+	Description string            `json:"description"`
+	Creator     string            `json:"creator"`
+	Milestones  []AddMilestoneReq `json:"milestones"`
+	Parties     []AddPartyReq     `json:"parties"`
+	Terms       string            `json:"terms"`
+	Attachments []string          `json:"attachments"`
 }
 
 type AddMilestoneReq struct {
@@ -68,25 +67,27 @@ type ContractRes struct {
 	Milestones  []ContractMilestoneRes    `json:"milestones"`
 	Parties     []ContractPartyRes        `json:"parties"`
 	Terms       string                    `json:"terms"`
-	Attachments [][]byte                  `json:"attachments"`
+	Attachments []string                 `json:"attachments"`
 	Status      blockchain.ContractStatus `json:"status"`
 	CreatedAt   time.Time                 `json:"created_at"`
 	UpdatedAt   time.Time                 `json:"updated_at"`
 }
 
 type ContractMilestoneRes struct {
-	ID          string    `json:"id"`
-	Title       string    `json:"title"`
-	Description string    `json:"description"`
-	Value       int       `json:"value"`
-	DueDate     time.Time `json:"due_date"`
-	Status      blockchain.MilestoneStatus    `json:"status"`
-	CreatedAt   time.Time `json:"created_at"`
-	CompletedAt time.Time `json:"completed_at"`
+	ID          string                     `json:"id"`
+	Title       string                     `json:"title"`
+	Description string                     `json:"description"`
+	Value       int                        `json:"value"`
+	DueDate     time.Time                  `json:"due_date"`
+	Status      blockchain.MilestoneStatus `json:"status"`
+	CreatedAt   time.Time                  `json:"created_at"`
+	Evidence    string                     `json:"evidence"`
+	ApprovedBy  []string                   `json:"approved_by"`
+	CompletedAt time.Time                  `json:"completed_at"`
 }
 
 type ContractPartyRes struct {
-	Address   string                    `json:"address"`
-	Role      blockchain.ContractRole   `json:"role"`
-	PublicKey string                    `json:"public_key"`
+	Address   string                  `json:"address"`
+	Role      blockchain.ContractRole `json:"role"`
+	PublicKey string                  `json:"public_key"`
 }

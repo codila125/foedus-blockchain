@@ -72,7 +72,7 @@ func ContractResponse(contract blockchain.Contract) ContractRes {
 		Milestones:  ContractMilestoneResponse(contract.Milestones),
 		Parties:     ContractPartyResponse(contract.Parties),
 		Terms:       string(contract.Terms),
-		Attachments: contract.Attachments,
+		Attachments: ContractAttachmentResponse(contract.Attachments),
 		Status:      contract.Status,
 		CreatedAt:   time.Unix(contract.CreatedAt, 0),
 		UpdatedAt:   time.Unix(contract.UpdatedAt, 0),
@@ -91,6 +91,8 @@ func ContractMilestoneResponse(milestones []*blockchain.Milestone) []ContractMil
 			Status:      milestone.Status,
 			CreatedAt:   time.Unix(milestone.CreatedAt, 0),
 			CompletedAt: time.Unix(milestone.CompletedAt, 0),
+			Evidence:    string(milestone.Evidence),
+			ApprovedBy:  milestone.ApprovedBy,
 		})
 	}
 	return milestoneRes
@@ -106,4 +108,12 @@ func ContractPartyResponse(parties []*blockchain.Party) []ContractPartyRes {
 		})
 	}
 	return partyRes
+}
+
+func ContractAttachmentResponse(attachments [][]byte) []string {
+	var attachmentRes []string
+	for _, attachment := range attachments {
+		attachmentRes = append(attachmentRes, string(attachment))
+	}
+	return attachmentRes
 }
