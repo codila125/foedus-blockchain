@@ -1,0 +1,49 @@
+meta {
+  name: createcontract
+  type: http
+  seq: 5
+}
+
+post {
+  url: http://localhost:3000/blockchain/12ijzAJCPAsYmmiPrTVNc8vjbDDExyN9PtBPaafLzyDzynG7uDR/createcontract
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "title": "New Website Development 2",
+    "description": "A contract to build and deploy a new corporate website.",
+    "milestones": [
+      {
+        "title": "Phase 1: Design and Mockups",
+        "description": "Deliver complete Figma mockups for the main pages.",
+        "value": 500,
+        "due_date": 1762329600
+      },
+      {
+        "title": "Phase 2: Frontend Development",
+        "description": "Develop the responsive frontend based on the approved mockups.",
+        "value": 1500,
+        "due_date": 1764921600
+      }
+    ],
+    "parties": [
+      {
+        "address": "1eFk7dmJLdPthN7731wmK5uQzwJrH3iD7WBcK2JPjkor6KCu5m",
+        "role": "CONTRACTOR"
+      },
+      {
+        "address": "1zwhRZsThx5WiQzTM5w4odM29nGCTcqsM4xDnbcNcWgq3YntPZ",
+        "role": "CONTRACTOR"
+      }
+    ],
+    "terms": "Payment will be released upon successful completion and approval of each milestone. All code must be submitted to the company's private GitHub repository.",
+    "dispute_handler": "12ijzAJCPAsYmmiPrTVNc8vjbDDExyN9PtBPaafLzyDzynG7uDR"
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
