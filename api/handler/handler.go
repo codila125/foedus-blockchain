@@ -117,3 +117,29 @@ func (h *Handler) GetContract(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(contract)
 }
+
+func (h *Handler) ApproveContract(w http.ResponseWriter, r *http.Request) {
+	contractID := chi.URLParam(r, "contractID")
+	approver := chi.URLParam(r, "address")
+	if !wallet.ValidateAddress(approver) {
+		http.Error(w, "Invalid approver address: "+approver, http.StatusBadRequest)
+		return
+	}
+
+	err := h.server.ApproveContract(h.ctx, contractID, approver)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	contract, err := h.server.ContractStatus(h.ctx, contractID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(contract)
+	
+}

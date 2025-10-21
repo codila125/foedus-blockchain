@@ -119,6 +119,6 @@ func Handle(err error) {
 		Handles errors by logging them.
 	*/
 	if err != nil {
-		log.Panic(err)
+		log.Println(err)
 	}
 }

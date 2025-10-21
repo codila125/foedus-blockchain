@@ -57,7 +57,7 @@ func CoinbaseOp(creator, data string) *Contract {
 		Status:         ContractActive,
 		Milestones:     []*Milestone{},
 		Parties:        []*Party{},
-		Terms:      []byte{},
+		Terms:          []byte{},
 		CreatorAddress: creator,
 	}
 
@@ -164,7 +164,8 @@ func (ct *Contract) SignContract(privKey *ecdsa.PrivateKey, partyAddress []byte)
 	}
 
 	if !found {
-		return fmt.Errorf("party not found in contract: %x", partyAddress)
+		log.Printf("[CONTRACT] ✗ Party not found in contract: %x", partyAddress)
+		return fmt.Errorf("[CONTRACT] ✗ Party not found in contract: %x", partyAddress)
 	}
 
 	ct.UpdatedAt = time.Now().Unix()
@@ -348,7 +349,7 @@ func CreateContract(title, description string, w *wallet.Wallet, milestones []*M
 		CreatorAddress: string(creatorAddress),
 		Milestones:     milestones,
 		Parties:        parties,
-		Terms:      terms,
+		Terms:          terms,
 		CreatedAt:      time.Now().Unix(),
 		UpdatedAt:      time.Now().Unix(),
 		Status:         ContractDraft,
@@ -402,6 +403,11 @@ func (contract *Contract) ApproveContract(wallet *wallet.Wallet) error {
 		return nil
 	}
 
+	if contract.Status != ContractDraft {
+		log.Printf("[CONTRACT] ✗ Cannot approve contract %x - invalid status: %s", contract.ID, contract.Status)
+		return fmt.Errorf("[CONTRACT] Cannot approve contract - invalid status: %s", contract.Status)
+	}
+
 	// Check if this approval will complete all signatures
 	willBeComplete := true
 	for _, party := range contract.Parties {
@@ -425,7 +431,10 @@ func (contract *Contract) ApproveContract(wallet *wallet.Wallet) error {
 	privatekey, err := wallet.ReconstructECDSAKey() // Reconstruct the ECDSA private key from the wallet
 	Handle(err)
 	err = contract.SignContract(privatekey, wallet.Address())
-	Handle(err)
+	if err != nil {
+		log.Printf("[CONTRACT] Failed to approve contract: %x by: %x", contract.ID, wallet.Address())
+		return fmt.Errorf("[CONTRACT] Failed to approve contract: %x by: %x", contract.ID, wallet.Address())
+	}
 	log.Printf("[CONTRACT] ✓ Party %x approved the contract %x", wallet.Address(), contract.ID)
 
 	if contract.AreAllPartiesSigned() {

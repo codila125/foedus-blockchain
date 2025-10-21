@@ -131,6 +131,33 @@ func (s *Server) CreateContract(ctx context.Context, req CreateContractReq) (str
 	return hex.EncodeToString(contract.ID), nil
 }
 
+func (s *Server) ApproveContract(ctx context.Context, contractID string, approverAddress string) error {
+	// Implementation for approving a contract goes here
+	log.Printf("[SERVER] Approving contract ID: %s by approver: %s", contractID, approverAddress)
+
+	wallets, err := wallet.CreateWallets(s.port)
+	if err != nil {
+		return err
+	}
+
+	approverWallet := wallets.GetWallet(approverAddress)
+	contract, err := s.chain.FindContract(contractID)
+	if err != nil {
+		return err
+	}
+
+	err = contract.ApproveContract(&approverWallet)
+	if err != nil {
+		return err
+	}
+
+	cts := []*blockchain.Contract{&contract}  // Include the updated contract transaction in the new block
+	block := s.chain.MineBlock(nil, cts) // Mine a new block with the updated contract transaction
+
+	log.Printf("[SERVER] Contract ID %s approved by %s and included in block %x", contractID, approverAddress, block.Hash)
+	return nil
+}
+
 func (s *Server) ContractStatus(ctx context.Context, contractID string) (ContractRes, error) {
 	// Implementation for retrieving contract status goes here
 	log.Printf("[SERVER] Retrieving status for contract ID: %s", contractID)
