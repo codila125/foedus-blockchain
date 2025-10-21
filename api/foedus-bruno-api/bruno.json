@@ -1,6 +1,6 @@
 {
   "version": "1",
-  "name": "foedus",
+  "name": "foedus-bruno-api",
   "type": "collection",
   "ignore": [
     "node_modules",

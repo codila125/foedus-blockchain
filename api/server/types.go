@@ -59,3 +59,34 @@ type AddPartyReq struct {
 	Address string                  `json:"address"`
 	Role    blockchain.ContractRole `json:"role"`
 }
+
+type ContractRes struct {
+	ID          string                    `json:"id"`
+	Title       string                    `json:"title"`
+	Description string                    `json:"description"`
+	Creator     string                    `json:"creator"`
+	Milestones  []ContractMilestoneRes    `json:"milestones"`
+	Parties     []ContractPartyRes        `json:"parties"`
+	Terms       string                    `json:"terms"`
+	Attachments [][]byte                  `json:"attachments"`
+	Status      blockchain.ContractStatus `json:"status"`
+	CreatedAt   time.Time                 `json:"created_at"`
+	UpdatedAt   time.Time                 `json:"updated_at"`
+}
+
+type ContractMilestoneRes struct {
+	ID          string    `json:"id"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	Value       int       `json:"value"`
+	DueDate     time.Time `json:"due_date"`
+	Status      blockchain.MilestoneStatus    `json:"status"`
+	CreatedAt   time.Time `json:"created_at"`
+	CompletedAt time.Time `json:"completed_at"`
+}
+
+type ContractPartyRes struct {
+	Address   string                    `json:"address"`
+	Role      blockchain.ContractRole   `json:"role"`
+	PublicKey string                    `json:"public_key"`
+}

@@ -57,7 +57,7 @@ func CoinbaseOp(creator, data string) *Contract {
 		Status:         ContractActive,
 		Milestones:     []*Milestone{},
 		Parties:        []*Party{},
-		TermsHash:      []byte{},
+		Terms:      []byte{},
 		CreatorAddress: creator,
 	}
 
@@ -318,7 +318,7 @@ func (ct *Contract) GetUnsignedParties() []*Party {
 	return unsigned
 }
 
-func CreateContract(title, description string, w *wallet.Wallet, milestones []*Milestone, parties []*Party, termsHash []byte, attachments [][]byte) *Contract {
+func CreateContract(title, description string, w *wallet.Wallet, milestones []*Milestone, parties []*Party, terms []byte, attachments [][]byte) *Contract {
 	creatorAddress := string(w.Address())
 
 	creatorParty := &Party{
@@ -348,7 +348,7 @@ func CreateContract(title, description string, w *wallet.Wallet, milestones []*M
 		CreatorAddress: string(creatorAddress),
 		Milestones:     milestones,
 		Parties:        parties,
-		TermsHash:      termsHash,
+		Terms:      terms,
 		CreatedAt:      time.Now().Unix(),
 		UpdatedAt:      time.Now().Unix(),
 		Status:         ContractDraft,

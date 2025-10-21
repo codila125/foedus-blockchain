@@ -131,6 +131,20 @@ func (s *Server) CreateContract(ctx context.Context, req CreateContractReq) (str
 	return hex.EncodeToString(contract.ID), nil
 }
 
+func (s *Server) ContractStatus(ctx context.Context, contractID string) (ContractRes, error) {
+	// Implementation for retrieving contract status goes here
+	log.Printf("[SERVER] Retrieving status for contract ID: %s", contractID)
+
+	contract, err := s.chain.FindContract(contractID)
+	if err != nil {
+		return ContractRes{}, err
+	}
+
+	log.Printf("[SERVER] Retrieved status for contract ID %s: %s", contractID, contract.Status)
+
+	return ContractResponse(contract), nil
+}
+
 func CloseDB(chain *blockchain.BlockChain) {
 	/*
 		If a termination signal is received, this function ensures that the

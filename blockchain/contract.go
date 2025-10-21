@@ -50,7 +50,7 @@ type Contract struct {
 	Status         ContractStatus // Current contract status
 	Milestones     []*Milestone   // Array of milestones
 	Parties        []*Party       // Involved parties (use pointers so signatures persist)
-	TermsHash      []byte         // Hash of contract terms
+	Terms      []byte         // Hash of contract terms
 	CreatorAddress string         // Address of contract creator
 	Attachments    [][]byte       // Array of attachment hashes (IPFS hashes, etc.)
 }
@@ -77,7 +77,7 @@ type ContractCore struct {
     CreatedAt      int64
     Milestones     []*MilestoneCore // Use a core version of Milestone
     Parties        []*PartyCore     // Use a core version of Party
-	TermsHash      []byte
+	Terms      []byte
     DisputeHandler string
     CreatorAddress string
 	Attachments    [][]byte       // Array of attachment hashes (IPFS hashes, etc.)
@@ -121,7 +121,7 @@ func (ct *Contract) HashContract() []byte {
         Description:    ct.Description,
         CreatorAddress: ct.CreatorAddress,
         Attachments:    ct.Attachments,
-        TermsHash:      ct.TermsHash,
+        Terms:         ct.Terms,
         CreatedAt:      ct.CreatedAt,
     }
 

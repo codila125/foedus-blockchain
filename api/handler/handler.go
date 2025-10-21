@@ -103,3 +103,17 @@ func (h *Handler) CreateContract(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{"contract_id": contractID})
 }
+
+func (h *Handler) GetContract(w http.ResponseWriter, r *http.Request) {
+	contractID := chi.URLParam(r, "contractID")
+
+	contract, err := h.server.ContractStatus(h.ctx, contractID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(contract)
+}
