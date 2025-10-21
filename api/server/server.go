@@ -2,14 +2,16 @@ package server
 
 import (
 	"context"
+	"encoding/hex"
 	"log"
 	"os"
 	"runtime"
 	"syscall"
+	"time"
 
-	"github.com/vrecan/death/v3"
 	"github.com/codila125/foedus-blockchain/blockchain"
 	"github.com/codila125/foedus-blockchain/wallet"
+	"github.com/vrecan/death/v3"
 )
 
 type Server struct {
@@ -81,6 +83,52 @@ func (s *Server) GetBalance(ctx context.Context, address string) (int, error) {
 	log.Printf("[SERVER] Retrieved balance for address %s: %d", address, balance)
 
 	return balance, nil
+}
+
+func (s *Server) CreateContract(ctx context.Context, req CreateContractReq) (string, error) {
+	// Implementation for creating a contract goes here
+	log.Printf("[SERVER] Creating contract: %s", req.Title)
+
+	wallets, err := wallet.CreateWallets(s.port)
+	if err != nil {
+		return "", err
+	}
+
+	creatorWallet := wallets.GetWallet(req.Creator)
+	partyWallet := wallets.GetWallet(req.Parties[0].Address)
+
+	party := &blockchain.Party{
+		Address:   req.Parties[0].Address,
+		Role:      req.Parties[0].Role,
+		PublicKey: partyWallet.PublicKey,
+		Signature: []byte{},
+	}
+
+	milestones := []*blockchain.Milestone{}
+	for _, milestoneReq := range req.Milestones {
+		milestone := &blockchain.Milestone{
+			Title:       milestoneReq.Title,
+			Description: milestoneReq.Description,
+			Value:       milestoneReq.Value,
+			DueDate:     milestoneReq.DueDate,
+			Status:      blockchain.MilestoneActive,
+			CreatedAt:   time.Now().Unix(),
+			CompletedAt: 0,
+			Evidence:	[]byte{},
+			ApprovedBy: []string{},
+			DisputedBy: []string{},
+		}
+		milestone.ID = milestone.HashMilestones()
+		milestones = append(milestones, milestone)
+	}
+
+	contract := blockchain.CreateContract(req.Title, req.Description, &creatorWallet, milestones, []*blockchain.Party{party}, []byte(req.Terms), req.Attachments)
+	cts := []*blockchain.Contract{contract}  // Include the contract transaction in the new block
+	block := s.chain.MineBlock(nil, cts) // Mine a new block with the contract transaction
+
+	log.Printf("[SERVER] Contract created and included in block %x", block.Hash)
+
+	return hex.EncodeToString(contract.ID), nil
 }
 
 func CloseDB(chain *blockchain.BlockChain) {

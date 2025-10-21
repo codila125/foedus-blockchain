@@ -19,7 +19,7 @@ const (
 type MilestoneStatus string
 
 const (
-	MilestonePending   MilestoneStatus = "ACTIVE"
+	MilestoneActive   MilestoneStatus = "ACTIVE"
 	MilestoneCompleted MilestoneStatus = "COMPLETED"
 	MilestoneRejected  MilestoneStatus = "DISPUTED"
 	MilestoneCancelled MilestoneStatus = "CANCELLED"
@@ -28,7 +28,6 @@ const (
 // Milestone represents a deliverable within a contract
 type Milestone struct {
 	ID          []byte          // Unique identifier for the milestone
-	ContractID  []byte          // Reference to parent contract
 	Title       string          // Milestone title/description
 	Description string          // Detailed description
 	Value       int             // Payment amount for this milestone
@@ -52,7 +51,6 @@ type Contract struct {
 	Milestones     []*Milestone   // Array of milestones
 	Parties        []*Party       // Involved parties (use pointers so signatures persist)
 	TermsHash      []byte         // Hash of contract terms
-	DisputeHandler string         // Address of dispute arbitrator
 	CreatorAddress string         // Address of contract creator
 	Attachments    [][]byte       // Array of attachment hashes (IPFS hashes, etc.)
 }
@@ -96,7 +94,6 @@ type PartyCore struct {
 // MilestoneCore represents the immutable parts of a Milestone for contract ID generation.
 // Status, CompletedAt, Evidence are mutable and excluded.
 type MilestoneCore struct {
-	ContractID  []byte
     Title       string
     Description string
     Value       int
@@ -125,7 +122,6 @@ func (ct *Contract) HashContract() []byte {
         CreatorAddress: ct.CreatorAddress,
         Attachments:    ct.Attachments,
         TermsHash:      ct.TermsHash,
-        DisputeHandler: ct.DisputeHandler,
         CreatedAt:      ct.CreatedAt,
     }
 

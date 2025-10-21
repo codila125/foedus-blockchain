@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-
 	"github.com/go-chi/chi/v5"
 
 	"github.com/codila125/foedus-blockchain/api/server"
@@ -72,4 +71,35 @@ func (h *Handler) GetBalance(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]int{"balance": balance})
+}
+
+func (h *Handler) CreateContract(w http.ResponseWriter, r *http.Request) {
+	creator := chi.URLParam(r, "address")
+	if !wallet.ValidateAddress(creator) {
+		http.Error(w, "Invalid creator address: "+creator, http.StatusBadRequest)
+		return
+	}
+	var req server.CreateContractReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	req.Creator = creator
+
+	for _, party := range req.Parties {
+		if !wallet.ValidateAddress(party.Address) {
+			http.Error(w, "Invalid party address: "+party.Address, http.StatusBadRequest)
+			return
+		}
+	}
+
+	contractID, err := h.server.CreateContract(h.ctx, req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]string{"contract_id": contractID})
 }

@@ -20,6 +20,7 @@ func RegisterRoutes(handler *handler.Handler) *chi.Mux {
 
 		r.Route("/{address}", func(r chi.Router) {
 			r.Get("/getbalance", handler.GetBalance)
+			r.Post("/createcontract", handler.CreateContract)
 		})
 	})
 	return r

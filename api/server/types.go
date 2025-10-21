@@ -16,8 +16,8 @@ type BlockRes struct {
 type BlockContractRes struct {
 	ID        string                    `json:"id"`
 	Title     string                    `json:"title"`
-	CreatedAt time.Time                  `json:"created_at"`
-	UpdatedAt time.Time                  `json:"updated_at"`
+	CreatedAt time.Time                 `json:"created_at"`
+	UpdatedAt time.Time                 `json:"updated_at"`
 	Status    blockchain.ContractStatus `json:"status"`
 }
 
@@ -35,4 +35,27 @@ type BlockTransactionInputRes struct {
 type BlockTransactionOutputRes struct {
 	To    string `json:"to"`
 	Value int    `json:"value"`
+}
+
+type CreateContractReq struct {
+	Title          string            `json:"title"`
+	Description    string            `json:"description"`
+	Creator        string            `json:"creator"`
+	Milestones     []AddMilestoneReq `json:"milestones"`
+	Parties        []AddPartyReq     `json:"parties"`
+	Terms          string            `json:"terms"`
+	DisputeHandler string            `json:"dispute_handler"`
+	Attachments    [][]byte          `json:"attachments"`
+}
+
+type AddMilestoneReq struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Value       int    `json:"value"`
+	DueDate     int64  `json:"due_date"`
+}
+
+type AddPartyReq struct {
+	Address string                  `json:"address"`
+	Role    blockchain.ContractRole `json:"role"`
 }

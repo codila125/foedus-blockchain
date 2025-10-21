@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/gob"
 	"encoding/hex"
 	"errors"
@@ -57,7 +58,6 @@ func CoinbaseOp(creator, data string) *Contract {
 		Milestones:     []*Milestone{},
 		Parties:        []*Party{},
 		TermsHash:      []byte{},
-		DisputeHandler: "",
 		CreatorAddress: creator,
 	}
 
@@ -318,7 +318,7 @@ func (ct *Contract) GetUnsignedParties() []*Party {
 	return unsigned
 }
 
-func CreateContract(title, description string, w *wallet.Wallet, milestones []*Milestone, parties []*Party, termsHash []byte, disputeHandler string) *Contract {
+func CreateContract(title, description string, w *wallet.Wallet, milestones []*Milestone, parties []*Party, termsHash []byte, attachments [][]byte) *Contract {
 	creatorAddress := string(w.Address())
 
 	creatorParty := &Party{
@@ -349,10 +349,10 @@ func CreateContract(title, description string, w *wallet.Wallet, milestones []*M
 		Milestones:     milestones,
 		Parties:        parties,
 		TermsHash:      termsHash,
-		DisputeHandler: disputeHandler,
 		CreatedAt:      time.Now().Unix(),
 		UpdatedAt:      time.Now().Unix(),
 		Status:         ContractDraft,
+		Attachments:    attachments,
 	}
 
 	ct.ID = ct.HashContract()
@@ -362,6 +362,36 @@ func CreateContract(title, description string, w *wallet.Wallet, milestones []*M
 	log.Printf("[CONTRACT] Contract created - ID: %x, Title: %s", ct.ID, title)
 
 	return &ct
+}
+
+func (milestone *Milestone) HashMilestones() []byte {
+	/*
+		Hashes the milestones of the contract for ID generation.
+	*/
+	core := MilestoneCore{
+		Title:       milestone.Title,
+		Description: milestone.Description,
+		Value:       milestone.Value,
+		CreatedAt:   milestone.CreatedAt,
+	}
+
+	var hash [32]byte
+	hash = sha256.Sum256(core.SerializeMilestoneCore())
+
+	return hash[:]
+}
+
+func (mm *MilestoneCore) SerializeMilestoneCore() []byte {
+	/*
+		Serializes the immutable core of the milestone into a byte array.
+	*/
+	var buff bytes.Buffer
+	enc := gob.NewEncoder(&buff)
+	err := enc.Encode(mm)
+	if err != nil {
+		log.Panic(err)
+	}
+	return buff.Bytes()
 }
 
 func (contract *Contract) ApproveContract(wallet *wallet.Wallet) error {

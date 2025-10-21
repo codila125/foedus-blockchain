@@ -175,7 +175,7 @@ func (cli *CommandLine) createContract(title, description, creator, parties, nod
 	}
 
 	// Create a new contract transaction
-	ct := blockchain.CreateContract(title, description, &wallet, nil, []*blockchain.Party{party}, nil, "")
+	ct := blockchain.CreateContract(title, description, &wallet, nil, []*blockchain.Party{party}, nil, [][]byte{})
 
 	cts := []*blockchain.Contract{ct}  // Include the contract transaction in the new block
 	block := chain.MineBlock(nil, cts) // Mine a new block with the contract transaction
