@@ -129,10 +129,6 @@ func (cli *CommandLine) getBalance(address string, nodeID string) {
 	// Load the existing blockchain and rebuild the UTXO set
 	chain := blockchain.ContinueBlockChain(nodeID) // Load the existing blockchain
 	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
-	UTXOSet.Reindex() // Rebuild the UTXO set
-
-	ICCTSet := blockchain.ICCTSet{Blockchain: chain}
-	ICCTSet.Reindex() // Rebuild the ICCT set
 
 	defer chain.Database.Close()
 
@@ -163,11 +159,6 @@ func (cli *CommandLine) createContract(title, description, creator, parties, nod
 	// Load the existing blockchain and UTXO set
 	chain := blockchain.ContinueBlockChain(nodeID)
 	defer chain.Database.Close()
-	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
-	UTXOSet.Reindex()
-
-	ICCTSet := blockchain.ICCTSet{Blockchain: chain}
-	ICCTSet.Reindex()
 
 	wallets, err := wallet.CreateWallets(nodeID) // Load existing wallets
 	if err != nil {
@@ -206,11 +197,6 @@ func (cli *CommandLine) approveContract(contractID, approverAddress, nodeID stri
 	// Load the existing blockchain and UTXO set
 	chain := blockchain.ContinueBlockChain(nodeID)
 	defer chain.Database.Close()
-	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
-	UTXOSet.Reindex()
-
-	ICCTSet := blockchain.ICCTSet{Blockchain: chain}
-	ICCTSet.Reindex()
 
 	wallets, err := wallet.CreateWallets(nodeID) // Load existing wallets
 	if err != nil {
@@ -255,10 +241,6 @@ func (cli *CommandLine) send(from, to string, amount int, nodeID string, mineNow
 	chain := blockchain.ContinueBlockChain(nodeID)
 	defer chain.Database.Close()
 	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
-	UTXOSet.Reindex()
-
-	ICCTSet := blockchain.ICCTSet{Blockchain: chain}
-	ICCTSet.Reindex()
 
 	wallets, err := wallet.CreateWallets(nodeID) // Load existing wallets
 	if err != nil {
@@ -272,8 +254,7 @@ func (cli *CommandLine) send(from, to string, amount int, nodeID string, mineNow
 		log.Printf("[CLI] Mining transaction locally")
 		cbTx := blockchain.CoinbaseTx(from, "")    // Create a coinbase transaction for the sender
 		txs := []*blockchain.Transaction{cbTx, tx} // Include the coinbase transaction in the new block
-		newBlock := chain.MineBlock(txs, nil)      // Mine a new block with the transactions
-		UTXOSet.Update(newBlock)                   // Update the UTXO set with the new block
+		newBlock := chain.MineBlock(txs, nil)      // Mine a new block with the transactions                   // Update the UTXO set with the new block
 		log.Printf("[CLI] ✓ Transaction mined in block %x", newBlock.Hash)
 	} else {
 		log.Printf("[CLI] Sending transaction to network")

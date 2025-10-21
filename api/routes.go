@@ -17,6 +17,10 @@ func RegisterRoutes(handler *handler.Handler) *chi.Mux {
 		r.Get("/createwallet", handler.CreateWallet)
 		r.Get("/listaddresses", handler.ListAddresses)
 		r.Get("/printchain", handler.PrintChain)
+
+		r.Route("/{address}", func(r chi.Router) {
+			r.Get("/getbalance", handler.GetBalance)
+		})
 	})
 	return r
 }

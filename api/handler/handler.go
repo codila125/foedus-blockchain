@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/codila125/foedus-blockchain/api/server"
+	"github.com/codila125/foedus-blockchain/wallet"
 )
 
 type Handler struct {
@@ -50,4 +53,23 @@ func (h *Handler) PrintChain(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(blocks)
+}
+
+func (h *Handler) GetBalance(w http.ResponseWriter, r *http.Request) {
+	address := chi.URLParam(r, "address")
+
+	if !wallet.ValidateAddress(address) {
+		http.Error(w, "Invalid wallet address", http.StatusBadRequest)
+		return
+	}
+
+	balance, err := h.server.GetBalance(h.ctx, address)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]int{"balance": balance})
 }

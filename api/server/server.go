@@ -60,3 +60,24 @@ func (s *Server) PrintChain(ctx context.Context) ([]*BlockRes) {
 
 	return blocks
 }
+
+func (s *Server) GetBalance(ctx context.Context, address string) (int, error) {
+	
+	chain := blockchain.ContinueBlockChain(s.port)
+	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
+
+	defer chain.Database.Close()
+
+	balance := 0
+	pubKeyHash := wallet.Base58Decode([]byte(address))
+	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-4]
+	UTXOs := UTXOSet.FindUnspentTransactions(pubKeyHash)
+
+	for _, out := range UTXOs {
+		balance += out.Value
+	}
+
+	log.Printf("[SERVER] Retrieved balance for address %s: %d", address, balance)
+
+	return balance, nil
+}
