@@ -16,8 +16,6 @@ import (
 	"time"
 
 	"github.com/codila125/foedus-blockchain/wallet"
-	"github.com/codila125/foedus-blockchain/protobuf"
-	"google.golang.org/protobuf/proto"
 )
 
 func CoinbaseOp(creator, data string) *Contract {
@@ -366,23 +364,6 @@ func (milestone *Milestone) HashMilestones() []byte {
 	hash := sha256.Sum256(core.SerializeMilestoneCore())
 
 	return hash[:]
-}
-
-func (mm *MilestoneCore) SerializeMilestoneCore() []byte {
-	/*
-		Serializes the immutable core of the milestone into a byte array.
-	*/
-	protoMilestoneCore := &protobuf.MilestoneCore{
-		Title:       mm.Title,
-		Description: mm.Description,
-		Value:       int32(mm.Value),
-		CreatedAt:   mm.CreatedAt,
-	}
-
-	data, err := proto.Marshal(protoMilestoneCore)
-	Handle(err)
-
-	return data
 }
 
 func (contract *Contract) ApproveContract(wallet *wallet.Wallet) error {

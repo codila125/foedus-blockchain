@@ -3,8 +3,6 @@ package blockchain
 import (
 	"bytes"
 
-	"github.com/codila125/foedus-blockchain/protobuf"
-	"google.golang.org/protobuf/proto"
 	"github.com/codila125/foedus-blockchain/wallet"
 )
 
@@ -57,44 +55,4 @@ func (out *TxOutput) IsLockedWithKey(pubKeyHash []byte) bool {
 		'pubKeyHash' is the hash of the public key to check against.
 	*/
 	return bytes.Equal(out.PubKeyHash, pubKeyHash)
-}
-
-func (outs TxOutputs) SerializeOutputs() []byte {
-	/*
-		Serializes the TxOutputs struct into a byte slice.
-	*/
-    protoOutputs := &protobuf.TxOutputs{}
-    
-    for _, output := range outs.Outputs {
-        protoOutputs.Outputs = append(protoOutputs.Outputs, &protobuf.TxOutput{
-            Value:      int32(output.Value),
-            PubKeyHash: output.PubKeyHash,
-        })
-    }
-    
-    data, err := proto.Marshal(protoOutputs)
-    Handle(err)
-    return data
-}
-
-func DeserializeOutputs(data []byte) TxOutputs {
-	/*
-		Deserializes a byte slice into a TxOutputs struct.
-		'data' is the byte slice to be deserialized.
-	*/
-
-	protobufOutputs := &protobuf.TxOutputs{}
-
-	if err := proto.Unmarshal(data, protobufOutputs); err != nil {
-		Handle(err)
-	}
-
-	var outputs TxOutputs
-	for _, output := range protobufOutputs.Outputs {
-		outputs.Outputs = append(outputs.Outputs, TxOutput{
-			Value:      int(output.Value),
-			PubKeyHash: output.PubKeyHash,
-		})
-	}
-	return outputs
 }

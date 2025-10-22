@@ -2,10 +2,6 @@ package blockchain
 
 import (
 	"crypto/sha256"
-	"log"
-
-	"github.com/codila125/foedus-blockchain/protobuf"
-	"google.golang.org/protobuf/proto"
 )
 
 type ContractStatus string
@@ -96,44 +92,6 @@ type MilestoneCore struct {
 	Description string
 	Value       int
 	CreatedAt   int64
-}
-
-// SerializeContractCore serializes the immutable core of the contract into a byte array.
-func (cc *ContractCore) SerializeContractCore() []byte {
-
-	protoContractCore := &protobuf.ContractCore{
-		Title:          cc.Title,
-		Description:    cc.Description,
-		CreatedAt:      cc.CreatedAt,
-		Terms:          cc.Terms,
-		CreatorAddress: cc.CreatorAddress,
-		Attachments:    cc.Attachments,
-	}
-
-	for _, m := range cc.Milestones {
-		protoMilestoneCore := &protobuf.MilestoneCore{
-			Title:       m.Title,
-			Description: m.Description,
-			Value:       int32(m.Value),
-			CreatedAt:   m.CreatedAt,
-		}
-		protoContractCore.Milestones = append(protoContractCore.Milestones, protoMilestoneCore)
-	}
-
-	for _, p := range cc.Parties {
-		protoPartyCore := &protobuf.PartyCoreData{
-			Address:   p.Address,
-			Role:      p.Role,
-			PublicKey: p.PublicKey,
-		}
-		protoContractCore.Parties = append(protoContractCore.Parties, protoPartyCore)
-	}
-
-	data, err := proto.Marshal(protoContractCore)
-	if err != nil {
-		log.Panic(err)
-	}
-	return data
 }
 
 // HashContract computes the hash of the immutable core of the contract.
