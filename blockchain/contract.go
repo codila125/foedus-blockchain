@@ -1,9 +1,5 @@
 package blockchain
 
-import (
-	"crypto/sha256"
-)
-
 type ContractStatus string
 
 const (
@@ -93,45 +89,3 @@ type MilestoneCore struct {
 	Value       int
 	CreatedAt   int64
 }
-
-// HashContract computes the hash of the immutable core of the contract.
-// This hash serves as the permanent, unchanging ID of the contract.
-// It explicitly excludes mutable fields like Status, UpdatedAt, and Party.Signature.
-func (ct *Contract) HashContract() []byte {
-	// Create a ContractCore from the current contract, excluding mutable fields
-	core := ContractCore{
-		Title:          ct.Title,
-		Description:    ct.Description,
-		CreatorAddress: ct.CreatorAddress,
-		Attachments:    ct.Attachments,
-		Terms:          ct.Terms,
-		CreatedAt:      ct.CreatedAt,
-	}
-
-	// Populate MilestonesCore from ct.Milestones
-	core.Milestones = make([]*MilestoneCore, len(ct.Milestones))
-	for i, m := range ct.Milestones {
-		core.Milestones[i] = &MilestoneCore{
-			Title:       m.Title,
-			Description: m.Description,
-			Value:       m.Value,
-		}
-	}
-
-	// Populate PartiesCore from ct.Parties
-	core.Parties = make([]*PartyCore, len(ct.Parties))
-	for i, p := range ct.Parties {
-		core.Parties[i] = &PartyCore{
-			Address:   p.Address,
-			Role:      string(p.Role),
-			PublicKey: p.PublicKey,
-		}
-	}
-
-	var hash [32]byte
-	serializedCore := core.SerializeContractCore()
-	hash = sha256.Sum256(serializedCore)
-
-	return hash[:]
-}
-

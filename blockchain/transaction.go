@@ -5,7 +5,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -20,21 +19,6 @@ type Transaction struct {
 	ID      []byte
 	Inputs  []TxInput
 	Outputs []TxOutput
-}
-
-func (tx *Transaction) HashTransaction() []byte {
-	/*
-		Computes the hash of the transaction.
-		Returns the SHA-256 hash of the serialized transaction.
-	*/
-	var hash [32]byte
-
-	txCopy := *tx
-	txCopy.ID = []byte{}
-
-	hash = sha256.Sum256(txCopy.SerializeTransaction())
-
-	return hash[:]
 }
 
 func CoinbaseTx(to, data string) *Transaction {

@@ -4,8 +4,6 @@ package blockchain
 import (
 	"log"
 	"time"
-
-	"github.com/codila125/foedus-blockchain/merkle"
 )
 
 type Block struct {
@@ -37,45 +35,6 @@ func CreateBlock(txs []*Transaction, cts []*Contract, prevhash []byte, height in
 	block.Nonce = nonce
 
 	return block
-}
-
-func (b *Block) HashTransactions() []byte {
-	/*
-		Computes the Merkle root of the block's transactions.
-		Returns the Merkle root as a byte slice.
-	*/
-	var transactions [][]byte
-
-	// Serialize each transaction and collect them
-	for _, tx := range b.Transactions {
-		transactions = append(transactions, tx.ID)
-	}
-	if len(transactions) == 0 {
-		return []byte{}
-	}
-	tree := merkle.NewMerkleTree(transactions) // Create a new Merkle tree from the transactions
-
-	return tree.RootNode.Data
-}
-
-func (b *Block) HashContracts() []byte {
-	/*
-		Computes the Merkle root of the block's contracts.
-		Returns the Merkle root as a byte slice.
-	*/
-	var contracts [][]byte
-
-	// Serialize each contract and collect them
-	for _, ct := range b.Contracts {
-		contracts = append(contracts, ct.ID)
-	}
-	if len(contracts) == 0 {
-		return []byte{}
-	}
-
-	tree := merkle.NewMerkleTree(contracts) // Create a new Merkle tree from the contracts
-
-	return tree.RootNode.Data
 }
 
 func Genesis(coinbase *Transaction, contractbase *Contract) *Block {

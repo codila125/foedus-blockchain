@@ -5,7 +5,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -348,22 +347,6 @@ func CreateContract(title, description string, w *wallet.Wallet, milestones []*M
 	log.Printf("[CONTRACT] Contract created - ID: %x, Title: %s", contract.ID, title)
 
 	return &contract
-}
-
-func (milestone *Milestone) HashMilestones() []byte {
-	/*
-		Hashes the milestones of the contract for ID generation.
-	*/
-	core := MilestoneCore{
-		Title:       milestone.Title,
-		Description: milestone.Description,
-		Value:       milestone.Value,
-		CreatedAt:   milestone.CreatedAt,
-	}
-
-	hash := sha256.Sum256(core.SerializeMilestoneCore())
-
-	return hash[:]
 }
 
 func (contract *Contract) ApproveContract(wallet *wallet.Wallet) error {
