@@ -19,7 +19,7 @@ func (blockchain *BlockChain) FindUTXO() map[string]TxOutputs {
 		Scans the entire blockchain to find all unspent transaction outputs (UTXOs).
 		Returns a map where the key is the transaction ID and the value is the corresponding unspent outputs.
 	*/
-	UTXO := make(map[string]TxOutputs) // UTXO map to hold unspent transaction outputs
+	UTXO := make(map[string]TxOutputs)        // UTXO map to hold unspent transaction outputs
 	spentTXs := make(map[string]map[int]bool) // Map to track spent transaction outputs for O(1) lookup
 
 	iterator := blockchain.Iterator() // Create an iterator to traverse the blockchain
@@ -182,7 +182,9 @@ func (u *UTXOSet) DeleteByPrefix(prefix []byte) {
 	db := u.Blockchain.Database.GetRawDB()
 
 	iter, _ := db.NewIter(&pebble.IterOptions{})
-	defer iter.Close()
+	defer func() {
+		_ = iter.Close()
+	}()
 
 	collectSize := 100000
 	keysForDelete := make([][]byte, 0, collectSize)
@@ -248,7 +250,9 @@ func (u UTXOSet) CountTransactions() int {
 
 	// Create iterator for prefix scan
 	iter, _ := db.NewIter(&pebble.IterOptions{})
-	defer iter.Close()
+	defer func() {
+		_ = iter.Close()
+	}()
 
 	// Count UTXO entries with the specified prefix
 	for iter.SeekGE(UTXOPrefix); iter.Valid(); iter.Next() {
@@ -270,7 +274,9 @@ func (u UTXOSet) FindUnspentTransactions(pubKeyHash []byte) []TxOutput {
 
 	// Create iterator for prefix scan
 	iter, _ := db.NewIter(&pebble.IterOptions{})
-	defer iter.Close()
+	defer func() {
+		_ = iter.Close()
+	}()
 
 	// Iterate over all UTXO entries with the specified prefix
 	for iter.SeekGE(UTXOPrefix); iter.Valid(); iter.Next() {
@@ -307,7 +313,9 @@ func (u UTXOSet) FindSpendableOutputs(pubKeyHash []byte, amount int) (int, map[s
 
 	// Create iterator for prefix scan
 	iter, _ := db.NewIter(&pebble.IterOptions{})
-	defer iter.Close()
+	defer func() {
+		_ = iter.Close()
+	}()
 
 	// Iterate over all UTXO entries
 	for iter.SeekGE(UTXOPrefix); iter.Valid(); iter.Next() {

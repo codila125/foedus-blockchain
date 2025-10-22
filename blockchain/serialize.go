@@ -11,18 +11,18 @@ func (outs TxOutputs) SerializeOutputs() []byte {
 	/*
 		Serializes the TxOutputs struct into a byte slice.
 	*/
-    protoOutputs := &protobuf.TxOutputs{}
-    
-    for _, output := range outs.Outputs {
-        protoOutputs.Outputs = append(protoOutputs.Outputs, &protobuf.TxOutput{
-            Value:      int32(output.Value),
-            PubKeyHash: output.PubKeyHash,
-        })
-    }
-    
-    data, err := proto.Marshal(protoOutputs)
-    Handle(err)
-    return data
+	protoOutputs := &protobuf.TxOutputs{}
+
+	for _, output := range outs.Outputs {
+		protoOutputs.Outputs = append(protoOutputs.Outputs, &protobuf.TxOutput{
+			Value:      int32(output.Value),
+			PubKeyHash: output.PubKeyHash,
+		})
+	}
+
+	data, err := proto.Marshal(protoOutputs)
+	Handle(err)
+	return data
 }
 
 func DeserializeOutputs(data []byte) TxOutputs {
@@ -109,7 +109,6 @@ func DeserializeTransaction(data []byte) Transaction {
 
 	return Transaction{tx.Id, inputs, outputs}
 }
-
 
 func (mm *MilestoneCore) SerializeMilestoneCore() []byte {
 	/*
@@ -246,7 +245,6 @@ func DeserializeContractState(data []byte) ContractState {
 
 // SerializeContractCore serializes the immutable core of the contract into a byte array.
 func (cc *ContractCore) SerializeContractCore() []byte {
-
 	protoContractCore := &protobuf.ContractCore{
 		Title:          cc.Title,
 		Description:    cc.Description,
@@ -281,7 +279,6 @@ func (cc *ContractCore) SerializeContractCore() []byte {
 	}
 	return data
 }
-
 
 func (b *Block) SerializeBlock() []byte {
 	/*

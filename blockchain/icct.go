@@ -146,7 +146,9 @@ func (i *ICCTSet) DeleteByPrefix(prefix []byte) {
 	db := i.Blockchain.Database.GetRawDB()
 
 	iter, _ := db.NewIter(&pebble.IterOptions{})
-	defer iter.Close()
+	defer func() {
+		_ = iter.Close()
+	}()
 
 	collectSize := 100000
 	keysForDelete := make([][]byte, 0, collectSize)
@@ -212,7 +214,9 @@ func (i ICCTSet) CountContracts() int {
 
 	// Create iterator for prefix scan
 	iter, _ := db.NewIter(&pebble.IterOptions{})
-	defer iter.Close()
+	defer func() {
+		_ = iter.Close()
+	}()
 
 	// Count ICCT entries with the specified prefix
 	for iter.SeekGE(ICCTPrefix); iter.Valid(); iter.Next() {

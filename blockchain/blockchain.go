@@ -12,9 +12,9 @@ import (
 )
 
 const (
-	DBPath        = "./temp/blocks_%s"
-	genesisData   = "Genesis Foedus"
-	LastHashKey   = "lh" // Key to store the last block hash
+	DBPath      = "./temp/blocks_%s"
+	genesisData = "Genesis Foedus"
+	LastHashKey = "lh" // Key to store the last block hash
 )
 
 type BlockChain struct {
@@ -53,7 +53,9 @@ func NewBlockChain(address string, nodeID string) *BlockChain {
 
 	rawDB := db.GetRawDB()
 	batch := rawDB.NewBatch()
-	defer batch.Close()
+	defer func() {
+		_ = batch.Close()
+	}()
 
 	// Create the genesis block and store it in the database
 	cbtx := CoinbaseTx(address, genesisData) // Create the coinbase transaction for the genesis block
@@ -145,7 +147,7 @@ func (blockchain *BlockChain) MineBlock(transactions []*Transaction, contracts [
 	}
 	lastHash = make([]byte, len(lastHashBytes))
 	copy(lastHash, lastHashBytes)
-	closer.Close()
+	_ = closer.Close()
 
 	lastBlockData, closer, err := db.Get(lastHash)
 	if err != nil {
@@ -153,7 +155,7 @@ func (blockchain *BlockChain) MineBlock(transactions []*Transaction, contracts [
 	}
 	blockDataCopy := make([]byte, len(lastBlockData))
 	copy(blockDataCopy, lastBlockData)
-	closer.Close()
+	_ = closer.Close()
 
 	lastBlock := DeserializeBlock(blockDataCopy)
 	lastHeight = lastBlock.Height
@@ -161,10 +163,18 @@ func (blockchain *BlockChain) MineBlock(transactions []*Transaction, contracts [
 
 	// Store the new block in the database and update the last hash pointer
 	batch := db.NewBatch()
-	defer batch.Close()
+	defer func() {
+		_ = batch.Close()
+	}()
 
-	batch.Set(newBlock.Hash, newBlock.SerializeBlock(), nil)
-	batch.Set([]byte(LastHashKey), newBlock.Hash, nil)
+	err = batch.Set(newBlock.Hash, newBlock.SerializeBlock(), nil)
+	if err != nil {
+		log.Panicf("[BLOCKCHAIN] Failed to store new block: %v", err)
+	}
+	err = batch.Set([]byte(LastHashKey), newBlock.Hash, nil)
+	if err != nil {
+		log.Panicf("[BLOCKCHAIN] Failed to update last hash: %v", err)
+	}
 
 	blockchain.LastHash = newBlock.Hash
 	log.Printf("[MINING] Block mined successfully - Hash: %x, Height: %d", newBlock.Hash, newBlock.Height)
@@ -190,11 +200,13 @@ func (blockchain *BlockChain) AddBlock(block *Block) error {
 
 	db := blockchain.Database.GetRawDB()
 	batch := db.NewBatch()
-	defer batch.Close()
+	defer func() {
+		_ = batch.Close()
+	}()
 
 	_, closer, err := db.Get(block.Hash)
 	if err == nil {
-		closer.Close()
+		_ = closer.Close()
 		return nil // Block already exists
 	}
 
@@ -210,7 +222,7 @@ func (blockchain *BlockChain) AddBlock(block *Block) error {
 	}
 	lastHashCopy := make([]byte, len(lastHash))
 	copy(lastHashCopy, lastHash)
-	closer.Close()
+	_ = closer.Close()
 
 	lastBlockData, closer, err := db.Get(lastHashCopy)
 	if err != nil {
@@ -218,7 +230,7 @@ func (blockchain *BlockChain) AddBlock(block *Block) error {
 	}
 	blockDataCopy := make([]byte, len(lastBlockData))
 	copy(blockDataCopy, lastBlockData)
-	closer.Close()
+	_ = closer.Close()
 
 	lastBlock := DeserializeBlock(blockDataCopy)
 

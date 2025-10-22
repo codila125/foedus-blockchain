@@ -15,12 +15,12 @@ func (iter *BlockChainIterator) Next() *Block {
 		Return the deserialized block.
 	*/
 	db := iter.Database.GetRawDB()
-	
+
 	blockData, closer, err := db.Get(iter.CurrentHash)
 	if err != nil {
 		Handle(err)
 	}
-	
+
 	// Copy data immediately since closer will be deferred closed
 	blockDataCopy := make([]byte, len(blockData))
 	copy(blockDataCopy, blockData)

@@ -33,7 +33,11 @@ func (h *Handler) CreateWallet(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]string{"address": address})
+	err = json.NewEncoder(w).Encode(map[string]string{"address": address})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func (h *Handler) ListAddresses(w http.ResponseWriter, r *http.Request) {
@@ -45,7 +49,11 @@ func (h *Handler) ListAddresses(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string][]string{"addresses": addresses})
+	err = json.NewEncoder(w).Encode(map[string][]string{"addresses": addresses})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func (h *Handler) PrintChain(w http.ResponseWriter, r *http.Request) {
@@ -53,7 +61,11 @@ func (h *Handler) PrintChain(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(blocks)
+	err := json.NewEncoder(w).Encode(blocks)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func (h *Handler) GetBalance(w http.ResponseWriter, r *http.Request) {
@@ -72,7 +84,11 @@ func (h *Handler) GetBalance(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]int{"balance": balance})
+	err = json.NewEncoder(w).Encode(map[string]int{"balance": balance})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func (h *Handler) CreateContract(w http.ResponseWriter, r *http.Request) {
@@ -103,7 +119,11 @@ func (h *Handler) CreateContract(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]string{"contract_id": contractID})
+	err = json.NewEncoder(w).Encode(map[string]string{"contract_id": contractID})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func (h *Handler) GetContract(w http.ResponseWriter, r *http.Request) {

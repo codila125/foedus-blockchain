@@ -72,7 +72,9 @@ func (cli *CommandLine) printChain(nodeID string) {
 		Prints all the blocks in the blockchain along with their details in a formatted block structure.
 	*/
 	chain := blockchain.ContinueBlockChain(nodeID) // Load the existing blockchain
-	defer chain.Database.Close()
+	defer func() {
+		_ = chain.Database.Close()
+	}()
 	iter := chain.Iterator()
 
 	blockNumber := 0

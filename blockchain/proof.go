@@ -35,15 +35,15 @@ func (pow *ProofOfWork) InitData(nonce int) []byte {
 	buffer = append(buffer, pow.Block.PrevHash...)
 	buffer = append(buffer, pow.Block.HashTransactions()...) // Merkle root of transactions
 	buffer = append(buffer, pow.Block.HashContracts()...)    // Merkle root of contracts
-	
+
 	nonceBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(nonceBytes, uint64(nonce))
 	buffer = append(buffer, nonceBytes...)
-	
+
 	difficultyBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(difficultyBytes, uint64(Difficulty))
 	buffer = append(buffer, difficultyBytes...)
-	
+
 	return buffer
 }
 

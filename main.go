@@ -24,6 +24,9 @@ func main() {
 		serve := server.NewServer(nodeID)
 		handle := handler.NewHandler(serve)
 		api.RegisterRoutes(handle)
-		api.Start(":" + nodeID)
+		err := api.Start(":" + nodeID)
+		if err != nil {
+			log.Fatalf("[SERVER] Failed to start API server: %v", err)
+		}
 	}
 }

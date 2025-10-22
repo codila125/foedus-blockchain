@@ -237,7 +237,6 @@ func CloseDB(chain *blockchain.BlockChain) {
 		defer os.Exit(1)       // Exit with a non-zero status to indicate termination
 		defer runtime.Goexit() // Ensure all goroutines are terminated
 		log.Printf("[SERVER] Shutting down node, closing database...")
-		chain.Database.Close() // Close the blockchain database
-		log.Printf("[SERVER] Database closed successfully")
+		_ = chain.Database.Close() // Close the blockchain database
 	})
 }

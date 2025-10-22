@@ -2,7 +2,7 @@ package blockchain
 
 import (
 	"crypto/sha256"
-	
+
 	"github.com/codila125/foedus-blockchain/merkle"
 )
 
@@ -14,7 +14,7 @@ func (b *Block) HashTransactions() []byte {
 	if len(b.Transactions) == 0 {
 		return []byte{}
 	}
-	
+
 	transactions := make([][]byte, len(b.Transactions))
 	for i, tx := range b.Transactions {
 		transactions[i] = tx.ID
@@ -32,10 +32,10 @@ func (b *Block) HashContracts() []byte {
 	if len(b.Contracts) == 0 {
 		return []byte{}
 	}
-	
+
 	contracts := make([][]byte, len(b.Contracts))
-	for i, ct := range b.Contracts {
-		contracts[i] = ct.ID
+	for i, contract := range b.Contracts {
+		contracts[i] = contract.ID
 	}
 
 	tree := merkle.NewMerkleTree(contracts) // Create a new Merkle tree from the contracts
@@ -43,24 +43,23 @@ func (b *Block) HashContracts() []byte {
 	return tree.RootNode.Data
 }
 
-
 // HashContract computes the hash of the immutable core of the contract.
 // This hash serves as the permanent, unchanging ID of the contract.
 // It explicitly excludes mutable fields like Status, UpdatedAt, and Party.Signature.
-func (ct *Contract) HashContract() []byte {
+func (contract *Contract) HashContract() []byte {
 	// Create a ContractCore from the current contract, excluding mutable fields
 	core := ContractCore{
-		Title:          ct.Title,
-		Description:    ct.Description,
-		CreatorAddress: ct.CreatorAddress,
-		Attachments:    ct.Attachments,
-		Terms:          ct.Terms,
-		CreatedAt:      ct.CreatedAt,
+		Title:          contract.Title,
+		Description:    contract.Description,
+		CreatorAddress: contract.CreatorAddress,
+		Attachments:    contract.Attachments,
+		Terms:          contract.Terms,
+		CreatedAt:      contract.CreatedAt,
 	}
 
-	// Populate MilestonesCore from ct.Milestones (pre-allocate)
-	core.Milestones = make([]*MilestoneCore, len(ct.Milestones))
-	for i, m := range ct.Milestones {
+	// Populate MilestonesCore from contract.Milestones (pre-allocate)
+	core.Milestones = make([]*MilestoneCore, len(contract.Milestones))
+	for i, m := range contract.Milestones {
 		core.Milestones[i] = &MilestoneCore{
 			Title:       m.Title,
 			Description: m.Description,
@@ -69,9 +68,9 @@ func (ct *Contract) HashContract() []byte {
 		}
 	}
 
-	// Populate PartiesCore from ct.Parties (pre-allocate)
-	core.Parties = make([]*PartyCore, len(ct.Parties))
-	for i, p := range ct.Parties {
+	// Populate PartiesCore from contract.Parties (pre-allocate)
+	core.Parties = make([]*PartyCore, len(contract.Parties))
+	for i, p := range contract.Parties {
 		core.Parties[i] = &PartyCore{
 			Address:   p.Address,
 			Role:      string(p.Role),
@@ -85,7 +84,6 @@ func (ct *Contract) HashContract() []byte {
 
 	return hash[:]
 }
-
 
 func (milestone *Milestone) HashMilestones() []byte {
 	/*

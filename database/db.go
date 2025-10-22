@@ -49,7 +49,9 @@ func (pdb *PebbleDB) Get(key []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer closer.Close()
+	defer func() {
+		_ = closer.Close()
+	}()
 	return value, nil
 }
 
