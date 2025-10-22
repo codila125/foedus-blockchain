@@ -1,9 +1,11 @@
+// Package handler implements HTTP handlers for the Foedus Blockchain API.
 package handler
 
 import (
 	"context"
 	"encoding/json"
 	"net/http"
+
 	"github.com/go-chi/chi/v5"
 
 	"github.com/codila125/foedus-blockchain/api/server"
@@ -11,7 +13,7 @@ import (
 )
 
 type Handler struct {
-	ctx   context.Context
+	ctx    context.Context
 	server *server.Server
 }
 
@@ -48,7 +50,7 @@ func (h *Handler) ListAddresses(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) PrintChain(w http.ResponseWriter, r *http.Request) {
 	blocks := h.server.PrintChain(h.ctx)
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(blocks)
@@ -141,7 +143,6 @@ func (h *Handler) ApproveContract(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(contract)
-	
 }
 
 func (h *Handler) ApproveMilestone(w http.ResponseWriter, r *http.Request) {
@@ -177,3 +178,4 @@ func (h *Handler) ApproveMilestone(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(contract)
 }
+

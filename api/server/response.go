@@ -3,9 +3,10 @@ package server
 import (
 	"encoding/hex"
 	"time"
+
 	"github.com/codila125/foedus-blockchain/blockchain"
 )
-	
+
 func BlockResponse(block *blockchain.Block) *BlockRes {
 	return &BlockRes{
 		Hash:         hex.EncodeToString(block.Hash),
@@ -33,9 +34,9 @@ func BlockTransactionResponse(transactions []*blockchain.Transaction) []BlockTra
 	var transactionRes []BlockTransactionRes
 	for _, tx := range transactions {
 		transactionRes = append(transactionRes, BlockTransactionRes{
-			ID:        hex.EncodeToString(tx.ID),
-			Inputs:    BlockTransactionInputResponse(tx.Inputs),
-			Outputs:   BlockTransactionOutputResponse(tx.Outputs),
+			ID:      hex.EncodeToString(tx.ID),
+			Inputs:  BlockTransactionInputResponse(tx.Inputs),
+			Outputs: BlockTransactionOutputResponse(tx.Outputs),
 		})
 	}
 	return transactionRes

@@ -12,20 +12,21 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/codila125/foedus-blockchain/wallet"
 )
 
-func (ct *Contract) SerializeContract() []byte {
+func (contract *Contract) SerializeContract() []byte {
 	/*
 		Serializes the contract into a byte array.
 	*/
 	var buff bytes.Buffer
 
 	enc := gob.NewEncoder(&buff)
-	err := enc.Encode(ct)
+	err := enc.Encode(contract)
 	if err != nil {
 		log.Panic(err)
 	}
@@ -66,12 +67,12 @@ func CoinbaseOp(creator, data string) *Contract {
 	return contract
 }
 
-func (ct *Contract) IsCoinbaseOp() bool {
+func (contract *Contract) IsCoinbaseOp() bool {
 	/*
 		Checks if the contract is a coinbase contract.
 		Returns true if the contract has the title "Coinbase Foedus" and has no milestones or parties.
 	*/
-	return ct.Title == "Coinbase Foedus" && len(ct.Milestones) == 0 && len(ct.Parties) == 0
+	return contract.Title == "Coinbase Foedus" && len(contract.Milestones) == 0 && len(contract.Parties) == 0
 }
 
 func (blockchain *BlockChain) FindContract(contractID string) (Contract, error) {
@@ -105,9 +106,9 @@ func (blockchain *BlockChain) FindContract(contractID string) (Contract, error) 
 	for {
 		block := iter.Next()
 
-		for _, ct := range block.Contracts {
-			if bytes.Equal(ct.ID, targetID) {
-				return *ct, nil
+		for _, contract := range block.Contracts {
+			if bytes.Equal(contract.ID, targetID) {
+				return *contract, nil
 			}
 		}
 
@@ -119,23 +120,23 @@ func (blockchain *BlockChain) FindContract(contractID string) (Contract, error) 
 	return Contract{}, errors.New("Contract not found")
 }
 
-func (ct *Contract) SignContract(privKey *ecdsa.PrivateKey, partyAddress []byte) error {
+func (contract *Contract) SignContract(privKey *ecdsa.PrivateKey, partyAddress []byte) error {
 	/*
 	   Signs a contract using the provided private key.
 	   A party signs to indicate they agree to the contract terms.
 	   The signature is appended to the party's entry in the Parties list.
 	*/
-	if ct.IsCoinbaseOp() {
+	if contract.IsCoinbaseOp() {
 		return nil
 	}
 
 	// Create a copy without existing signatures for hashing
-	ctCopy := *ct
+	ctCopy := *contract
 
 	// Deep copy the parties slice to avoid modifying the original
-	ctCopy.Parties = make([]*Party, len(ct.Parties))
-	for i := range ct.Parties {
-		partyCopy := *ct.Parties[i]
+	ctCopy.Parties = make([]*Party, len(contract.Parties))
+	for i := range contract.Parties {
+		partyCopy := *contract.Parties[i]
 		partyCopy.Signature = []byte{}
 		ctCopy.Parties[i] = &partyCopy
 	}
@@ -154,9 +155,9 @@ func (ct *Contract) SignContract(privKey *ecdsa.PrivateKey, partyAddress []byte)
 
 	// Find and update the party's signature
 	found := false
-	for i := range ct.Parties {
-		if bytes.Equal([]byte(ct.Parties[i].Address), partyAddress) {
-			ct.Parties[i].Signature = signature
+	for i := range contract.Parties {
+		if bytes.Equal([]byte(contract.Parties[i].Address), partyAddress) {
+			contract.Parties[i].Signature = signature
 			found = true
 			log.Printf("[CONTRACT] ✓ Contract signed by party: %x", partyAddress)
 			break
@@ -168,7 +169,7 @@ func (ct *Contract) SignContract(privKey *ecdsa.PrivateKey, partyAddress []byte)
 		return fmt.Errorf("[CONTRACT] ✗ Party not found in contract: %x", partyAddress)
 	}
 
-	ct.UpdatedAt = time.Now().Unix()
+	contract.UpdatedAt = time.Now().Unix()
 	return nil
 }
 
@@ -212,18 +213,18 @@ func (blockchain *BlockChain) VerifyContract(contract *Contract) bool {
 	return true
 }
 
-func (ct *Contract) VerifyContractSignature(partyAddress []byte, pubKeyBytes []byte) bool {
+func (contract *Contract) VerifyContractSignature(partyAddress []byte, pubKeyBytes []byte) bool {
 	/*
 	   Verifies that a specific party has validly signed the contract.
 	   Returns true if the signature is valid, false otherwise.
 	*/
-	if ct.IsCoinbaseOp() {
+	if contract.IsCoinbaseOp() {
 		return true
 	}
 
 	// Find the party and their signature
 	var partySignature []byte
-	for _, party := range ct.Parties {
+	for _, party := range contract.Parties {
 		if bytes.Equal([]byte(party.Address), partyAddress) {
 			partySignature = party.Signature
 			break
@@ -259,11 +260,11 @@ func (ct *Contract) VerifyContractSignature(partyAddress []byte, pubKeyBytes []b
 		Y:     y,
 	}
 	// Create contract copy without signatures for hashing
-	ctCopy := *ct
+	ctCopy := *contract
 	// Deep copy the parties slice to avoid modifying the original
-	ctCopy.Parties = make([]*Party, len(ct.Parties))
-	for i := range ct.Parties {
-		partyCopy := *ct.Parties[i]
+	ctCopy.Parties = make([]*Party, len(contract.Parties))
+	for i := range contract.Parties {
+		partyCopy := *contract.Parties[i]
 		partyCopy.Signature = []byte{}
 		ctCopy.Parties[i] = &partyCopy
 	}
@@ -286,16 +287,16 @@ func (ct *Contract) VerifyContractSignature(partyAddress []byte, pubKeyBytes []b
 	return isValid
 }
 
-func (ct *Contract) AreAllPartiesSigned() bool {
+func (contract *Contract) AreAllPartiesSigned() bool {
 	/*
 	   Checks if all parties have signed the contract.
 	   Returns true only if every party has a non-empty signature.
 	*/
-	if ct.IsCoinbaseOp() {
+	if contract.IsCoinbaseOp() {
 		return true
 	}
 
-	for _, party := range ct.Parties {
+	for _, party := range contract.Parties {
 		if len(party.Signature) == 0 {
 			return false
 		}
@@ -304,13 +305,13 @@ func (ct *Contract) AreAllPartiesSigned() bool {
 	return true
 }
 
-func (ct *Contract) GetUnsignedParties() []*Party {
+func (contract *Contract) GetUnsignedParties() []*Party {
 	/*
 	   Returns a list of parties that have not yet signed the contract.
 	*/
 	var unsigned []*Party
 
-	for _, party := range ct.Parties {
+	for _, party := range contract.Parties {
 		if len(party.Signature) == 0 {
 			unsigned = append(unsigned, party)
 		}
@@ -343,7 +344,7 @@ func CreateContract(title, description string, w *wallet.Wallet, milestones []*M
 		parties = append([]*Party{creatorParty}, parties...)
 	}
 
-	ct := Contract{
+	contract := Contract{
 		Title:          title,
 		Description:    description,
 		CreatorAddress: string(creatorAddress),
@@ -356,13 +357,13 @@ func CreateContract(title, description string, w *wallet.Wallet, milestones []*M
 		Attachments:    attachments,
 	}
 
-	ct.ID = ct.HashContract()
-	err := ct.ApproveContract(w)
+	contract.ID = contract.HashContract()
+	err := contract.ApproveContract(w)
 	Handle(err)
 
-	log.Printf("[CONTRACT] Contract created - ID: %x, Title: %s", ct.ID, title)
+	log.Printf("[CONTRACT] Contract created - ID: %x, Title: %s", contract.ID, title)
 
-	return &ct
+	return &contract
 }
 
 func (milestone *Milestone) HashMilestones() []byte {
@@ -376,8 +377,7 @@ func (milestone *Milestone) HashMilestones() []byte {
 		CreatedAt:   milestone.CreatedAt,
 	}
 
-	var hash [32]byte
-	hash = sha256.Sum256(core.SerializeMilestoneCore())
+	hash := sha256.Sum256(core.SerializeMilestoneCore())
 
 	return hash[:]
 }
@@ -471,7 +471,7 @@ func (contract *Contract) ApproveMilestone(wallet *wallet.Wallet, milestoneID []
 		log.Printf("[MILESTONE] ✗ Milestone %x not found in contract %x", milestoneID, contract.ID)
 		return nil, fmt.Errorf("[MILESTONE] ✗ Milestone %x not found in contract %x", milestoneID, contract.ID)
 	}
-	
+
 	if milestone.Status == MilestoneCompleted || milestone.Status == MilestoneCancelled {
 		log.Printf("[MILESTONE] ✗ Cannot approve milestone %x - invalid status: %s", milestone.ID, milestone.Status)
 		return nil, fmt.Errorf("[MILESTONE] Cannot approve milestone - invalid status: %s", milestone.Status)
@@ -524,12 +524,7 @@ func (milestone *Milestone) PartyApproved(address string) bool {
 	/*
 		Checks if a specific party has approved the milestone.
 	*/
-	for _, approver := range milestone.ApprovedBy {
-		if address == approver {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(milestone.ApprovedBy, address)
 }
 
 func (contract *Contract) AllMilestonesCompleted() bool {

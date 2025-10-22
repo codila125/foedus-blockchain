@@ -2,9 +2,9 @@ package blockchain
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/gob"
 	"log"
-	"crypto/sha256"
 )
 
 type ContractStatus string
@@ -19,7 +19,7 @@ const (
 type MilestoneStatus string
 
 const (
-	MilestoneActive   MilestoneStatus = "ACTIVE"
+	MilestoneActive    MilestoneStatus = "ACTIVE"
 	MilestoneCompleted MilestoneStatus = "COMPLETED"
 	MilestoneCancelled MilestoneStatus = "CANCELLED"
 )
@@ -48,7 +48,7 @@ type Contract struct {
 	Status         ContractStatus // Current contract status
 	Milestones     []*Milestone   // Array of milestones
 	Parties        []*Party       // Involved parties (use pointers so signatures persist)
-	Terms      []byte         // Hash of contract terms
+	Terms          []byte         // Hash of contract terms
 	CreatorAddress string         // Address of contract creator
 	Attachments    [][]byte       // Array of attachment hashes (IPFS hashes, etc.)
 }
@@ -70,82 +70,82 @@ const (
 )
 
 type ContractCore struct {
-    Title          string
-    Description    string
-    CreatedAt      int64
-    Milestones     []*MilestoneCore // Use a core version of Milestone
-    Parties        []*PartyCore     // Use a core version of Party
-	Terms      []byte
-    CreatorAddress string
-	Attachments    [][]byte       // Array of attachment hashes (IPFS hashes, etc.)
+	Title          string
+	Description    string
+	CreatedAt      int64
+	Milestones     []*MilestoneCore // Use a core version of Milestone
+	Parties        []*PartyCore     // Use a core version of Party
+	Terms          []byte
+	CreatorAddress string
+	Attachments    [][]byte // Array of attachment hashes (IPFS hashes, etc.)
 }
 
 // PartyCore represents the immutable parts of a Party for contract ID generation.
 // Signature is excluded as it's mutable.
 type PartyCore struct {
-    Address   string
-    Role      string
-    PublicKey []byte
+	Address   string
+	Role      string
+	PublicKey []byte
 }
 
 // MilestoneCore represents the immutable parts of a Milestone for contract ID generation.
 // Status, CompletedAt, Evidence are mutable and excluded.
 type MilestoneCore struct {
-    Title       string
-    Description string
-    Value       int
+	Title       string
+	Description string
+	Value       int
 	CreatedAt   int64
 }
 
 // SerializeContractCore serializes the immutable core of the contract into a byte array.
 func (cc *ContractCore) SerializeContractCore() []byte {
-    var buff bytes.Buffer
-    enc := gob.NewEncoder(&buff)
-    err := enc.Encode(cc)
-    if err != nil {
-        log.Panic(err)
-    }
-    return buff.Bytes()
+	var buff bytes.Buffer
+	enc := gob.NewEncoder(&buff)
+	err := enc.Encode(cc)
+	if err != nil {
+		log.Panic(err)
+	}
+	return buff.Bytes()
 }
 
 // HashContract computes the hash of the immutable core of the contract.
 // This hash serves as the permanent, unchanging ID of the contract.
 // It explicitly excludes mutable fields like Status, UpdatedAt, and Party.Signature.
 func (ct *Contract) HashContract() []byte {
-    // Create a ContractCore from the current contract, excluding mutable fields
-    core := ContractCore{
-        Title:          ct.Title,
-        Description:    ct.Description,
-        CreatorAddress: ct.CreatorAddress,
-        Attachments:    ct.Attachments,
-        Terms:         ct.Terms,
-        CreatedAt:      ct.CreatedAt,
-    }
+	// Create a ContractCore from the current contract, excluding mutable fields
+	core := ContractCore{
+		Title:          ct.Title,
+		Description:    ct.Description,
+		CreatorAddress: ct.CreatorAddress,
+		Attachments:    ct.Attachments,
+		Terms:          ct.Terms,
+		CreatedAt:      ct.CreatedAt,
+	}
 
-    // Populate MilestonesCore from ct.Milestones
-    core.Milestones = make([]*MilestoneCore, len(ct.Milestones))
-    for i, m := range ct.Milestones {
-        core.Milestones[i] = &MilestoneCore{
-            Title:       m.Title,
-            Description: m.Description,
-            Value:       m.Value,
-        }
-    }
+	// Populate MilestonesCore from ct.Milestones
+	core.Milestones = make([]*MilestoneCore, len(ct.Milestones))
+	for i, m := range ct.Milestones {
+		core.Milestones[i] = &MilestoneCore{
+			Title:       m.Title,
+			Description: m.Description,
+			Value:       m.Value,
+		}
+	}
 
-    // Populate PartiesCore from ct.Parties
-    core.Parties = make([]*PartyCore, len(ct.Parties))
-    for i, p := range ct.Parties {
-        core.Parties[i] = &PartyCore{
-            Address:   p.Address,
-            Role:      string(p.Role),
-            PublicKey: p.PublicKey,
-        }
-    }
+	// Populate PartiesCore from ct.Parties
+	core.Parties = make([]*PartyCore, len(ct.Parties))
+	for i, p := range ct.Parties {
+		core.Parties[i] = &PartyCore{
+			Address:   p.Address,
+			Role:      string(p.Role),
+			PublicKey: p.PublicKey,
+		}
+	}
 
-    var hash [32]byte
-    serializedCore := core.SerializeContractCore()
-    hash = sha256.Sum256(serializedCore)
-    
+	var hash [32]byte
+	serializedCore := core.SerializeContractCore()
+	hash = sha256.Sum256(serializedCore)
+
 	return hash[:]
-
 }
+

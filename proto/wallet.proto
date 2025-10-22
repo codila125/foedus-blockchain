@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package wallet;
+
+option go_package = "github.com/codila125/foedus-blockchain/protobuf";
+
+message Wallet {
+    bytes private_key = 1;
+    bytes public_key = 2;
+}
+
+message Wallets {
+    map<string, Wallet> wallets = 1;
+}
+
+//protoc -I=./proto --go_out=./protobuf proto/wallet.proto

@@ -275,4 +275,3 @@ func (i ICCTSet) GetContract(contractID []byte) (*Contract, error) {
 	state := DeserializeContractState(dataCopy)
 	return state.Contract, nil
 }
-

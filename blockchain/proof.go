@@ -74,32 +74,32 @@ func ToHex(num int64) []byte {
 }
 
 func (pow *ProofOfWork) Run() (int, []byte) {
-    var intHash big.Int
-    var hash [32]byte
+	var intHash big.Int
+	var hash [32]byte
 
-    nonce := 0
-    progressInterval := 100000  // Log every 100k attempts
+	nonce := 0
+	progressInterval := 100000 // Log every 100k attempts
 
-    // Iterate until a valid nonce is found or the maximum integer value is reached
-    for nonce < math.MaxInt64 {
-        data := pow.InitData(nonce)
-        hash = sha256.Sum256(data)
+	// Iterate until a valid nonce is found or the maximum integer value is reached
+	for nonce < math.MaxInt64 {
+		data := pow.InitData(nonce)
+		hash = sha256.Sum256(data)
 
-        intHash.SetBytes(hash[:])
+		intHash.SetBytes(hash[:])
 
-        // Show progress every progressInterval attempts
-        if nonce%progressInterval == 0 && nonce > 0 {
-            log.Printf("[PoW] Mining in progress... Nonce: %d (attempts)", nonce)
-        }
+		// Show progress every progressInterval attempts
+		if nonce%progressInterval == 0 && nonce > 0 {
+			log.Printf("[PoW] Mining in progress... Nonce: %d (attempts)", nonce)
+		}
 
-        // Check if the hash meets the target
-        if intHash.Cmp(pow.Target) == -1 {
-            log.Printf("[PoW] ✓ Mining complete! Found valid nonce: %d", nonce)
-            break
-        } else {
-            nonce++
-        }
-    }
+		// Check if the hash meets the target
+		if intHash.Cmp(pow.Target) == -1 {
+			log.Printf("[PoW] ✓ Mining complete! Found valid nonce: %d", nonce)
+			break
+		} else {
+			nonce++
+		}
+	}
 
-    return nonce, hash[:]
+	return nonce, hash[:]
 }

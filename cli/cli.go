@@ -62,7 +62,12 @@ func (cli *CommandLine) createWallet(nodeID string) {
 	*/
 	wallets, _ := wallet.CreateWallets(nodeID)
 	address := wallets.AddWallet()
-	wallets.SaveFile(nodeID)
+	err := wallets.SaveFile(nodeID)
+
+	if err != nil {
+		log.Printf("[WALLET] Failed to save wallet: %v\n", err)
+		return
+	}
 
 	log.Printf("[WALLET] New wallet created successfully with address: %s\n", address)
 }
@@ -164,8 +169,14 @@ func (cli *CommandLine) createContract(title, description, creator, parties, nod
 	if err != nil {
 		log.Panic(err)
 	}
-	wallet := wallets.GetWallet(creator)      // Get the wallet for the creator's address
-	partywallet := wallets.GetWallet(parties) // Get the wallet for the party's address
+	wallet, err := wallets.GetWallet(creator)      // Get the wallet for the creator's address
+	if err != nil {
+		log.Panic(err)
+	}
+	partywallet, err := wallets.GetWallet(parties) // Get the wallet for the party's address
+	if err != nil {
+		log.Panic(err)
+	}
 
 	party := &blockchain.Party{
 		Address:   string(partywallet.Address()),
@@ -208,7 +219,10 @@ func (cli *CommandLine) approveContract(contractID, approverAddress, nodeID stri
 		log.Panic(err)
 	}
 
-	wallet := wallets.GetWallet(approverAddress) // Get the wallet for the approver's address
+	wallet, err := wallets.GetWallet(approverAddress) // Get the wallet for the approver's address
+	if err != nil {
+		log.Panic(err)
+	}
 
 	err = contract.ApproveContract(&wallet)
 	if err != nil {
@@ -246,7 +260,10 @@ func (cli *CommandLine) send(from, to string, amount int, nodeID string, mineNow
 	if err != nil {
 		log.Panic(err)
 	}
-	wallet := wallets.GetWallet(from) // Get the wallet for the sender's address
+	wallet, err := wallets.GetWallet(from) // Get the wallet for the sender's address
+	if err != nil {
+		log.Panic(err)
+	}
 
 	// Create a new transaction from the sender to the recipient
 	tx := blockchain.NewTransaction(&wallet, to, amount, &UTXOSet)

@@ -1,12 +1,12 @@
 package wallet
 
 import (
-	"bytes"
-	"crypto/elliptic"
-	"encoding/gob"
 	"fmt"
 	"log"
 	"os"
+
+	"github.com/codila125/foedus-blockchain/protobuf"
+	"google.golang.org/protobuf/proto"
 )
 
 const walletFile = "./temp/wallets_%s.data"
@@ -52,11 +52,15 @@ func (ws *Wallets) GetAllAddresses() []string {
 	return addresses
 }
 
-func (ws Wallets) GetWallet(address string) Wallet {
+func (ws Wallets) GetWallet(address string) (Wallet, error) {
 	/*
 		Returns the Wallet instance associated with the given address.
 	*/
-	return *ws.Wallets[address]
+	if _, exists := ws.Wallets[address]; !exists {
+		log.Printf("[WALLET] Wallet not found for address: %s", address)
+		return Wallet{}, fmt.Errorf("[WALLET] Wallet not found for address: %s", address)
+	}
+	return *ws.Wallets[address], nil
 }
 
 func (ws *Wallets) LoadFile(nodeID string) error {
@@ -64,49 +68,63 @@ func (ws *Wallets) LoadFile(nodeID string) error {
 		Loads wallets from the wallet file into the Wallets instance.
 		Returns an error if the file does not exist or if there is an issue reading it.
 	*/
-	walletFile := fmt.Sprintf(walletFile, nodeID)
+	walletPath := fmt.Sprintf(walletFile, nodeID)
 
-	if _, err := os.Stat(walletFile); os.IsNotExist(err) {
-		return err
+	if _, err := os.Stat(walletPath); os.IsNotExist(err) {
+		return fmt.Errorf("[WALLET] Wallet file does not exist: %w", err)
 	}
-
-	var wallets Wallets
 
 	// Read the wallet file
-	fileContent, err := os.ReadFile(walletFile)
+	fileContent, err := os.ReadFile(walletPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("[WALLET] Failed to read wallet file: %w", err)
 	}
 
-	gob.Register(elliptic.P256())                           // Register the elliptic curve for gob encoding/decoding
-	decoder := gob.NewDecoder(bytes.NewReader(fileContent)) // Create a decoder for the file content
-	err = decoder.Decode(&wallets)                          // Decode the file content into the wallets struct
-	if err != nil {
-		return err
+	protoWallets := &protobuf.Wallets{}
+	if err := proto.Unmarshal(fileContent, protoWallets); err != nil {
+		return fmt.Errorf("[WALLET] Failed to unmarshal wallets: %w", err)
 	}
 
-	ws.Wallets = wallets.Wallets
+	ws.Wallets = make(map[string]*Wallet)
+	for address, w := range protoWallets.Wallets {
+		ws.Wallets[address] = &Wallet{
+			PrivateKey: w.PrivateKey,
+			PublicKey:  w.PublicKey,
+		}
+	}
 
 	return nil
 }
 
-func (ws *Wallets) SaveFile(nodeID string) {
+func (ws *Wallets) SaveFile(nodeID string) error {
 	/*
 		Saves the Wallets instance to the wallet file.
 	*/
-	var content bytes.Buffer
-	walletFilePath := fmt.Sprintf(walletFile, nodeID)
+	walletPath := fmt.Sprintf(walletFile, nodeID)
 
-	gob.Register(elliptic.P256()) // Register the elliptic curve for gob encoding/decoding
-
-	encoder := gob.NewEncoder(&content) // Create an encoder for the content buffer
-	err := encoder.Encode(ws)           // Encode the Wallets instance into the buffer
-	if err != nil {
-		log.Panic(err)
+	if err := os.MkdirAll("./temp", 0o755); err != nil {
+		return fmt.Errorf("[WALLET] Failed to create temp directory: %w", err)
 	}
 
-	err = os.WriteFile(walletFilePath, content.Bytes(), 0o644) // Write the buffer content to the wallet file
-	if err != nil {
-		log.Panic(err)
+	protoWallets := &protobuf.Wallets{
+		Wallets: make(map[string]*protobuf.Wallet),
 	}
+
+	for address, w := range ws.Wallets {
+		protoWallets.Wallets[address] = &protobuf.Wallet{
+			PrivateKey: w.PrivateKey,
+			PublicKey:  w.PublicKey,
+		}
+	}
+
+	data, err := proto.Marshal(protoWallets)
+	if err != nil {
+		return fmt.Errorf("[WALLET] Failed to marshal wallets: %w", err)
+	}
+
+	err = os.WriteFile(walletPath, data, 0o600) // Write the buffer content to the wallet file
+	if err != nil {
+		return fmt.Errorf("[WALLET] Failed to save wallets to file: %w", err)
+	}
+	return nil
 }

@@ -3,6 +3,7 @@ package blockchain
 import (
 	"bytes"
 	"encoding/gob"
+
 	"github.com/codila125/foedus-blockchain/wallet"
 )
 

@@ -67,7 +67,7 @@ type ContractRes struct {
 	Milestones  []ContractMilestoneRes    `json:"milestones"`
 	Parties     []ContractPartyRes        `json:"parties"`
 	Terms       string                    `json:"terms"`
-	Attachments []string                 `json:"attachments"`
+	Attachments []string                  `json:"attachments"`
 	Status      blockchain.ContractStatus `json:"status"`
 	CreatedAt   time.Time                 `json:"created_at"`
 	UpdatedAt   time.Time                 `json:"updated_at"`

@@ -118,7 +118,7 @@ func (blockchain *BlockChain) MineBlock(transactions []*Transaction, contracts [
 	log.Printf("[MINING] Starting block mining with %d transaction(s) and %d contract(s)", len(transactions), len(contracts))
 
 	txMap := make(map[string]Transaction)
-	
+
 	for _, tx := range transactions {
 		txMap[hex.EncodeToString(tx.ID)] = *tx
 	}
@@ -198,7 +198,7 @@ func (blockchain *BlockChain) AddBlock(block *Block) error {
 		return nil // Block already exists
 	}
 
-	//Store block in database
+	// Store block in database
 	err = batch.Set(block.Hash, block.SerializeBlock(), nil)
 	if err != nil {
 		return err

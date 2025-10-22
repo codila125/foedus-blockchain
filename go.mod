@@ -7,6 +7,7 @@ require (
 	github.com/go-chi/chi/v5 v5.2.3
 	github.com/mr-tron/base58 v1.2.0
 	github.com/vrecan/death/v3 v3.0.3
+	google.golang.org/protobuf v1.36.6
 )
 
 require (
@@ -37,5 +38,4 @@ require (
 	golang.org/x/exp v0.0.0-20230626212559-97b1e661b5df // indirect
 	golang.org/x/sys v0.34.0 // indirect
 	golang.org/x/text v0.26.0 // indirect
-	google.golang.org/protobuf v1.36.6 // indirect
 )

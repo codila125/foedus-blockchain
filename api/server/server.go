@@ -1,3 +1,4 @@
+// Package server implements the gRPC server for the Foedus Blockchain.
 package server
 
 import (
@@ -29,13 +30,14 @@ func NewServer(port string) *Server {
 }
 
 func (s *Server) CreateWallet(ctx context.Context) (string, error) {
-	wallets, err := wallet.CreateWallets(s.port)
+	wallets, _ := wallet.CreateWallets(s.port)
+	address := wallets.AddWallet()
+	err := wallets.SaveFile(s.port)
 	if err != nil {
+		log.Printf("[SERVER] Failed to save wallet: %v\n", err)
 		return "", err
 	}
-	address := wallets.AddWallet()
-	wallets.SaveFile(s.port)
-	
+
 	log.Printf("[SERVER] New wallet created successfully with address: %s\n", address)
 	return address, nil
 }
@@ -52,7 +54,7 @@ func (s *Server) ListAddresses(ctx context.Context) ([]string, error) {
 	return addresses, nil
 }
 
-func (s *Server) PrintChain(ctx context.Context) ([]*BlockRes) {
+func (s *Server) PrintChain(ctx context.Context) []*BlockRes {
 	iterator := s.chain.Iterator()
 
 	var blocks []*BlockRes
@@ -94,11 +96,17 @@ func (s *Server) CreateContract(ctx context.Context, req CreateContractReq) (str
 		return "", err
 	}
 
-	creatorWallet := wallets.GetWallet(req.Creator)
+	creatorWallet, err := wallets.GetWallet(req.Creator)
+	if err != nil {
+		return "", err
+	}
 
 	party := []*blockchain.Party{}
 	for _, partyReq := range req.Parties {
-		partyWallet := wallets.GetWallet(partyReq.Address)
+		partyWallet, err := wallets.GetWallet(partyReq.Address)
+		if err != nil {
+			return "", err
+		}
 		party = append(party, &blockchain.Party{
 			Address:   partyReq.Address,
 			Role:      partyReq.Role,
@@ -117,8 +125,8 @@ func (s *Server) CreateContract(ctx context.Context, req CreateContractReq) (str
 			Status:      blockchain.MilestoneActive,
 			CreatedAt:   time.Now().Unix(),
 			CompletedAt: 0,
-			Evidence:	[]byte{},
-			ApprovedBy: []string{},
+			Evidence:    []byte{},
+			ApprovedBy:  []string{},
 		}
 		milestone.ID = milestone.HashMilestones()
 		milestones = append(milestones, milestone)
@@ -130,8 +138,8 @@ func (s *Server) CreateContract(ctx context.Context, req CreateContractReq) (str
 	}
 
 	contract := blockchain.CreateContract(req.Title, req.Description, &creatorWallet, milestones, party, []byte(req.Terms), attachments)
-	cts := []*blockchain.Contract{contract}  // Include the contract transaction in the new block
-	block := s.chain.MineBlock(nil, cts) // Mine a new block with the contract transaction
+	cts := []*blockchain.Contract{contract} // Include the contract transaction in the new block
+	block := s.chain.MineBlock(nil, cts)    // Mine a new block with the contract transaction
 
 	log.Printf("[SERVER] Contract created and included in block %x", block.Hash)
 
@@ -147,7 +155,10 @@ func (s *Server) ApproveContract(ctx context.Context, contractID string, approve
 		return err
 	}
 
-	approverWallet := wallets.GetWallet(approverAddress)
+	approverWallet, err := wallets.GetWallet(approverAddress)
+	if err != nil {
+		return err
+	}
 	contract, err := s.chain.FindContract(contractID)
 	if err != nil {
 		return err
@@ -158,8 +169,8 @@ func (s *Server) ApproveContract(ctx context.Context, contractID string, approve
 		return err
 	}
 
-	cts := []*blockchain.Contract{&contract}  // Include the updated contract transaction in the new block
-	block := s.chain.MineBlock(nil, cts) // Mine a new block with the updated contract transaction
+	cts := []*blockchain.Contract{&contract} // Include the updated contract transaction in the new block
+	block := s.chain.MineBlock(nil, cts)     // Mine a new block with the updated contract transaction
 
 	log.Printf("[SERVER] Contract ID %s approved by %s and included in block %x", contractID, approverAddress, block.Hash)
 	return nil
@@ -168,13 +179,16 @@ func (s *Server) ApproveContract(ctx context.Context, contractID string, approve
 func (s *Server) ApproveMilestone(ctx context.Context, contractID string, milestoneID string, approverAddress string, evidence []byte) error {
 	// Implementation for approving a milestone goes here
 	log.Printf("[SERVER] Approving milestone ID: %s in contract ID: %s by approver: %s", milestoneID, contractID, approverAddress)
-	
+
 	wallets, err := wallet.CreateWallets(s.port)
 	if err != nil {
 		return err
 	}
 
-	approverWallet := wallets.GetWallet(approverAddress)
+	approverWallet, err := wallets.GetWallet(approverAddress)
+	if err != nil {
+		return err
+	}
 	contract, err := s.chain.FindContract(contractID)
 	if err != nil {
 		return err
@@ -190,8 +204,8 @@ func (s *Server) ApproveMilestone(ctx context.Context, contractID string, milest
 		return err
 	}
 
-	cts := []*blockchain.Contract{updatedContract}  // Include the updated contract transaction in the new block
-	block := s.chain.MineBlock(nil, cts) // Mine a new block with the updated contract transaction
+	cts := []*blockchain.Contract{updatedContract} // Include the updated contract transaction in the new block
+	block := s.chain.MineBlock(nil, cts)           // Mine a new block with the updated contract transaction
 
 	log.Printf("[SERVER] Milestone ID %s in contract ID %s approved by %s and included in block %x", milestoneID, contractID, approverAddress, block.Hash)
 	return nil
@@ -227,3 +241,4 @@ func CloseDB(chain *blockchain.BlockChain) {
 		log.Printf("[SERVER] Database closed successfully")
 	})
 }
+
