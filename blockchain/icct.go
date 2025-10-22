@@ -2,11 +2,12 @@ package blockchain
 
 import (
 	"bytes"
-	"encoding/gob"
 	"encoding/hex"
 	"log"
 
 	"github.com/cockroachdb/pebble"
+	"github.com/codila125/foedus-blockchain/protobuf"
+	"google.golang.org/protobuf/proto"
 )
 
 var ICCTPrefix = []byte("icct-") // Prefix for Incomplete Contract Tracking entries in the database
@@ -25,13 +26,55 @@ func (cs *ContractState) SerializeContractState() []byte {
 	/*
 		Serializes the contract state into a byte array.
 	*/
-	var buff bytes.Buffer
-	enc := gob.NewEncoder(&buff)
-	err := enc.Encode(cs)
+	protoContractState := &protobuf.ContractState{}
+
+	for _, ms := range cs.Milestones {
+		protoMilestone := &protobuf.Milestone{
+			Id:          ms.ID,
+			Title:       ms.Title,
+			Description: ms.Description,
+			Value:       int32(ms.Value),
+			DueDate:     ms.DueDate,
+			Status:      string(ms.Status),
+			CreatedAt:   ms.CreatedAt,
+			CompletedAt: ms.CompletedAt,
+			Evidence:    ms.Evidence,
+			ApprovedBy:  ms.ApprovedBy,
+		}
+		protoContractState.Milestones = append(protoContractState.Milestones, protoMilestone)
+	}
+
+	protoContract := &protobuf.Contract{
+		Id:             cs.Contract.ID,
+		Title:          cs.Contract.Title,
+		Description:    cs.Contract.Description,
+		CreatedAt:      cs.Contract.CreatedAt,
+		UpdatedAt:      cs.Contract.UpdatedAt,
+		Status:         string(cs.Contract.Status),
+		CreatorAddress: cs.Contract.CreatorAddress,
+		Terms:          cs.Contract.Terms,
+		Attachments:    cs.Contract.Attachments,
+		Parties:        []*protobuf.Party{},
+	}
+
+	// Serialize Parties
+	for _, p := range cs.Contract.Parties {
+		protoParty := &protobuf.Party{
+			Address:   p.Address,
+			Role:      string(p.Role),
+			PublicKey: p.PublicKey,
+			Signature: p.Signature,
+		}
+		protoContract.Parties = append(protoContract.Parties, protoParty)
+	}
+
+	protoContractState.Contract = protoContract
+
+	data, err := proto.Marshal(protoContractState)
 	if err != nil {
 		log.Panic(err)
 	}
-	return buff.Bytes()
+	return data
 }
 
 func DeserializeContractState(data []byte) ContractState {
@@ -39,11 +82,59 @@ func DeserializeContractState(data []byte) ContractState {
 		Deserializes a byte array into a ContractState.
 	*/
 	var state ContractState
-	dec := gob.NewDecoder(bytes.NewReader(data))
-	err := dec.Decode(&state)
+
+	protoContractState := &protobuf.ContractState{}
+	err := proto.Unmarshal(data, protoContractState)
 	if err != nil {
 		log.Panic(err)
 	}
+
+	// Deserialize Milestones
+	for _, protoMs := range protoContractState.Milestones {
+		ms := &Milestone{
+			ID:          protoMs.Id,
+			Title:       protoMs.Title,
+			Description: protoMs.Description,
+			Value:       int(protoMs.Value),
+			DueDate:     protoMs.DueDate,
+			Status:      MilestoneStatus(protoMs.Status),
+			CreatedAt:   protoMs.CreatedAt,
+			CompletedAt: protoMs.CompletedAt,
+			Evidence:    protoMs.Evidence,
+			ApprovedBy:  protoMs.ApprovedBy,
+		}
+		state.Milestones = append(state.Milestones, ms)
+	}
+
+	// Deserialize Contract
+	protoCt := protoContractState.Contract
+	contract := &Contract{
+		ID:             protoCt.Id,
+		Title:          protoCt.Title,
+		Description:    protoCt.Description,
+		CreatedAt:      protoCt.CreatedAt,
+		UpdatedAt:      protoCt.UpdatedAt,
+		Status:         ContractStatus(protoCt.Status),
+		CreatorAddress: protoCt.CreatorAddress,
+		Terms:          protoCt.Terms,
+		Attachments:    protoCt.Attachments,
+		Milestones:     state.Milestones,
+		Parties:        []*Party{},
+	}
+
+	// Deserialize Parties from the protobuf Contract
+	for _, protoP := range protoCt.Parties {
+		party := &Party{
+			Address:   protoP.Address,
+			Role:      ContractRole(protoP.Role),
+			PublicKey: protoP.PublicKey,
+			Signature: protoP.Signature,
+		}
+		contract.Parties = append(contract.Parties, party)
+	}
+
+	state.Contract = contract
+
 	return state
 }
 

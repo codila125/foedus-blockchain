@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package core;
+
+option go_package = "github.com/codila125/foedus-blockchain/protobuf";
+
+// ============================================================================
+// Contract Core Structures (Immutable parts for ID generation)
+// ============================================================================
+
+// ContractCore represents the immutable core of a contract for ID generation
+message ContractCore {
+    string title = 1;
+    string description = 2;
+    int64 created_at = 3;
+    repeated MilestoneCore milestones = 4;
+    repeated PartyCoreData parties = 5;
+    bytes terms = 6;
+    string creator_address = 7;
+    repeated bytes attachments = 8;
+}
+
+// MilestoneCore represents the immutable parts of a milestone
+message MilestoneCore {
+    string title = 1;
+    string description = 2;
+    int32 value = 3;
+    int64 created_at = 4;
+}
+
+// PartyCoreData represents the immutable parts of a Party
+message PartyCoreData {
+    string address = 1;
+    string role = 2;
+    bytes public_key = 3;
+}
+
+// export PATH=$PATH:$HOME/go/bin
+// source ~/.zshrc
+// protoc -I=./proto --go_out=./protobuf proto/core.proto

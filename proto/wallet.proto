@@ -4,13 +4,21 @@ package wallet;
 
 option go_package = "github.com/codila125/foedus-blockchain/protobuf";
 
+// ============================================================================
+// Wallet Structures
+// ============================================================================
+
+// Wallet represents a single wallet with private and public keys
 message Wallet {
     bytes private_key = 1;
     bytes public_key = 2;
 }
 
+// Wallets is a collection of wallets
 message Wallets {
     map<string, Wallet> wallets = 1;
 }
 
-//protoc -I=./proto --go_out=./protobuf proto/wallet.proto
+// export PATH=$PATH:$HOME/go/bin
+// source ~/.zshrc
+// protoc -I=./proto --go_out=./protobuf proto/wallet.proto

@@ -1,0 +1,101 @@
+syntax = "proto3";
+
+package block;
+
+option go_package = "github.com/codila125/foedus-blockchain/protobuf";
+
+// ============================================================================
+// Block Structure
+// ============================================================================
+
+// Block represents a block in the blockchain
+message Block {
+    int64 timestamp = 1;
+    bytes hash = 2;
+    repeated Transaction transactions = 3;
+    repeated Contract contracts = 4;
+    bytes prev_hash = 5;
+    int32 nonce = 6;
+    int32 height = 7;
+}
+
+// ============================================================================
+// Transaction Structures
+// ============================================================================
+
+// Transaction represents a transaction in the blockchain
+message Transaction {
+    bytes id = 1;
+    repeated TxInput inputs = 2;
+    repeated TxOutput outputs = 3;
+}
+
+// TxInput represents an input in a transaction
+message TxInput {
+    bytes id = 1;
+    int32 out = 2;
+    bytes signature = 3;
+    bytes pub_key = 4;
+}
+
+// TxOutput represents an output in a transaction
+message TxOutput {
+    int32 value = 1;
+    bytes pub_key_hash = 2;
+}
+
+// TxOutputs represents a collection of transaction outputs
+message TxOutputs {
+    repeated TxOutput outputs = 1;
+}
+
+// ============================================================================
+// Contract Structures
+// ============================================================================
+
+// Contract represents a smart contract with milestones
+message Contract {
+    bytes id = 1;
+    string title = 2;
+    string description = 3;
+    int64 created_at = 4;
+    int64 updated_at = 5;
+    string status = 6;
+    repeated Milestone milestones = 7;
+    repeated Party parties = 8;
+    bytes terms = 9;
+    string creator_address = 10;
+    repeated bytes attachments = 11;
+}
+
+// Milestone represents a deliverable within a contract
+message Milestone {
+    bytes id = 1;
+    string title = 2;
+    string description = 3;
+    int32 value = 4;
+    int64 due_date = 5;
+    string status = 6;
+    int64 created_at = 7;
+    int64 completed_at = 8;
+    bytes evidence = 9;
+    repeated string approved_by = 10;
+}
+
+// Party represents a participant in a contract
+message Party {
+    string address = 1;
+    string role = 2;
+    bytes public_key = 3;
+    bytes signature = 4;
+}
+
+// ContractState wraps a contract with its milestones for storage
+message ContractState {
+    Contract contract = 1;
+    repeated Milestone milestones = 2;
+}
+
+// export PATH=$PATH:$HOME/go/bin
+// source ~/.zshrc
+// protoc -I=./proto --go_out=./protobuf proto/block.proto

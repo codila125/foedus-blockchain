@@ -6,7 +6,6 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/gob"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -14,7 +13,9 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/codila125/foedus-blockchain/protobuf"
 	"github.com/codila125/foedus-blockchain/wallet"
+	"google.golang.org/protobuf/proto"
 )
 
 type Transaction struct {
@@ -25,31 +26,65 @@ type Transaction struct {
 
 func (tx *Transaction) SerializeTransaction() []byte {
 	/*
-		Serializes the transaction using gob encoding.
+		Serializes the transaction using protobuf encoding.
 		Returns the serialized byte slice.
 	*/
-	var encoded bytes.Buffer
-
-	enc := gob.NewEncoder(&encoded)
-	err := enc.Encode(tx)
-	if err != nil {
-		log.Panic(err)
+	protoTransaction := &protobuf.Transaction{
+		Id:      tx.ID,
+		Inputs:  []*protobuf.TxInput{},
+		Outputs: []*protobuf.TxOutput{},
 	}
 
-	return encoded.Bytes()
+	for _, in := range tx.Inputs {
+		protoTransaction.Inputs = append(protoTransaction.Inputs, &protobuf.TxInput{
+			Id:        in.ID,
+			Out:       int32(in.Out),
+			Signature: in.Signature,
+			PubKey:    in.PubKey,
+		})
+	}
+
+	for _, out := range tx.Outputs {
+		protoTransaction.Outputs = append(protoTransaction.Outputs, &protobuf.TxOutput{
+			Value:      int32(out.Value),
+			PubKeyHash: out.PubKeyHash,
+		})
+	}
+
+	data, err := proto.Marshal(protoTransaction)
+	Handle(err)
+
+	return data
 }
 
 func DeserializeTransaction(data []byte) Transaction {
 	/*
 		Deserializes a byte slice into a Transaction.
 	*/
-	var transaction Transaction
-
-	decoder := gob.NewDecoder(bytes.NewReader(data))
-	err := decoder.Decode(&transaction)
+	var tx protobuf.Transaction
+	err := proto.Unmarshal(data, &tx)
 	Handle(err)
 
-	return transaction
+	var inputs []TxInput
+	var outputs []TxOutput
+
+	for _, input := range tx.Inputs {
+		inputs = append(inputs, TxInput{
+			ID:        input.Id,
+			Out:       int(input.Out),
+			Signature: input.Signature,
+			PubKey:    input.PubKey,
+		})
+	}
+
+	for _, output := range tx.Outputs {
+		outputs = append(outputs, TxOutput{
+			Value:      int(output.Value),
+			PubKeyHash: output.PubKeyHash,
+		})
+	}
+
+	return Transaction{tx.Id, inputs, outputs}
 }
 
 func (tx *Transaction) HashTransaction() []byte {

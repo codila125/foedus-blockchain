@@ -6,7 +6,6 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/gob"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -17,22 +16,9 @@ import (
 	"time"
 
 	"github.com/codila125/foedus-blockchain/wallet"
+	"github.com/codila125/foedus-blockchain/protobuf"
+	"google.golang.org/protobuf/proto"
 )
-
-func (contract *Contract) SerializeContract() []byte {
-	/*
-		Serializes the contract into a byte array.
-	*/
-	var buff bytes.Buffer
-
-	enc := gob.NewEncoder(&buff)
-	err := enc.Encode(contract)
-	if err != nil {
-		log.Panic(err)
-	}
-
-	return buff.Bytes()
-}
 
 func CoinbaseOp(creator, data string) *Contract {
 	/*
@@ -386,13 +372,17 @@ func (mm *MilestoneCore) SerializeMilestoneCore() []byte {
 	/*
 		Serializes the immutable core of the milestone into a byte array.
 	*/
-	var buff bytes.Buffer
-	enc := gob.NewEncoder(&buff)
-	err := enc.Encode(mm)
-	if err != nil {
-		log.Panic(err)
+	protoMilestoneCore := &protobuf.MilestoneCore{
+		Title:       mm.Title,
+		Description: mm.Description,
+		Value:       int32(mm.Value),
+		CreatedAt:   mm.CreatedAt,
 	}
-	return buff.Bytes()
+
+	data, err := proto.Marshal(protoMilestoneCore)
+	Handle(err)
+
+	return data
 }
 
 func (contract *Contract) ApproveContract(wallet *wallet.Wallet) error {
