@@ -28,8 +28,6 @@ func (cli *CommandLine) printUsage() {
 	fmt.Println(" listaddresses : lists the addresses in our wallet file")
 	fmt.Println(" reindex : rebuilds the UTXO and ICCT sets")
 	fmt.Println(" startnode -miner <ADDRESS> : starts a node with ID specified in NODE_ID env. var. -miner enables mining")
-	fmt.Println(" createcontract -title <TITLE> -creator <CREATOR_ADDRESS> -description <DESCRIPTION> -parties <PARTY_ADDRESSES> : creates a new contract")
-	fmt.Println(" approvecontract -contractid <CONTRACT_ID> -approver <APPROVER_ADDRESS> : approves an existing contract")
 }
 
 func (cli *CommandLine) validateArgs() {
@@ -150,92 +148,6 @@ func (cli *CommandLine) getBalance(address string, nodeID string) {
 	log.Printf("[CLI] Balance of %s retrieved: %d", address, balance)
 }
 
-func (cli *CommandLine) createContract(title, description, creator, parties, nodeID string) {
-	/*
-		Creates a new contract on the blockchain with the specified details.
-	*/
-	// Validate the creator's address
-	if !wallet.ValidateAddress(creator) {
-		log.Panic("[CLI] Invalid creator address")
-	}
-
-	log.Printf("[CLI] Creating contract: %s", title)
-
-	// Load the existing blockchain and UTXO set
-	chain := blockchain.ContinueBlockChain(nodeID)
-	defer chain.Database.Close()
-
-	wallets, err := wallet.CreateWallets(nodeID) // Load existing wallets
-	if err != nil {
-		log.Panic(err)
-	}
-	wallet, err := wallets.GetWallet(creator)      // Get the wallet for the creator's address
-	if err != nil {
-		log.Panic(err)
-	}
-	partywallet, err := wallets.GetWallet(parties) // Get the wallet for the party's address
-	if err != nil {
-		log.Panic(err)
-	}
-
-	party := &blockchain.Party{
-		Address:   string(partywallet.Address()),
-		Role:      "CONTRACTOR",
-		PublicKey: partywallet.PublicKey,
-		Signature: []byte{},
-	}
-
-	// Create a new contract transaction
-	ct := blockchain.CreateContract(title, description, &wallet, nil, []*blockchain.Party{party}, nil, [][]byte{})
-
-	cts := []*blockchain.Contract{ct}  // Include the contract transaction in the new block
-	block := chain.MineBlock(nil, cts) // Mine a new block with the contract transaction
-
-	log.Printf("[CLI] ✓ Contract created in block %x", block.Hash)
-}
-
-func (cli *CommandLine) approveContract(contractID, approverAddress, nodeID string) {
-	/*
-		Approves an existing contract on the blockchain by adding the approver's signature.
-	*/
-	// Validate the approver's address
-	if !wallet.ValidateAddress(approverAddress) {
-		log.Panic("[CLI] Invalid approver address")
-	}
-
-	log.Printf("[CLI] Approving contract: %s", contractID)
-
-	// Load the existing blockchain and UTXO set
-	chain := blockchain.ContinueBlockChain(nodeID)
-	defer chain.Database.Close()
-
-	wallets, err := wallet.CreateWallets(nodeID) // Load existing wallets
-	if err != nil {
-		log.Panic(err)
-	}
-
-	contract, err := chain.FindContract(contractID)
-	if err != nil {
-		log.Panic(err)
-	}
-
-	wallet, err := wallets.GetWallet(approverAddress) // Get the wallet for the approver's address
-	if err != nil {
-		log.Panic(err)
-	}
-
-	err = contract.ApproveContract(&wallet)
-	if err != nil {
-		log.Panic(err)
-	}
-
-	cts := []*blockchain.Contract{&contract} // Include the approved contract in the new block
-
-	chain.MineBlock(nil, cts)                // Mine a new block with the approved contract
-
-	log.Printf("[CLI] ✓ Contract %s approved", contractID)
-}
-
 func (cli *CommandLine) send(from, to string, amount int, nodeID string, mineNow bool) {
 	/*
 		Creates and sends a new transaction from one address to another, including a coinbase transaction for the sender.
@@ -331,8 +243,6 @@ func (cli *CommandLine) Run() {
 	listAddressesCmd := flag.NewFlagSet("listaddresses", flag.ExitOnError)
 	reindexCmd := flag.NewFlagSet("reindex", flag.ExitOnError)
 	startNodeCmd := flag.NewFlagSet("startnode", flag.ExitOnError)
-	createContractCmd := flag.NewFlagSet("createcontract", flag.ExitOnError)
-	approveContractCmd := flag.NewFlagSet("approvecontract", flag.ExitOnError)
 
 	createBlockchainAddress := createBlockchainCmd.String("address", "", "The address to send genesis block reward to")
 	getBalanceAddress := getBalanceCmd.String("address", "", "The address to get balance for")
@@ -341,12 +251,6 @@ func (cli *CommandLine) Run() {
 	sendAmount := sendCmd.Int("amount", 0, "Amount to send")
 	sendMine := sendCmd.Bool("mine", false, "Mine immediately on the same node")
 	startNodeMiner := startNodeCmd.String("miner", "", "Enable mining mode and send reward to ADDRESS")
-	createContractTitle := createContractCmd.String("title", "", "The title of the contract")
-	createContractDescription := createContractCmd.String("description", "", "The description of the contract")
-	createContractCreator := createContractCmd.String("creator", "", "The address of the contract creator")
-	createContractParties := createContractCmd.String("parties", "", "The addresses of the contract parties")
-	approveContractID := approveContractCmd.String("contractid", "", "The ID of the contract to approve")
-	approveContractApprover := approveContractCmd.String("approver", "", "The address of the approver")
 
 	switch os.Args[1] {
 	case "reindex":
@@ -386,16 +290,6 @@ func (cli *CommandLine) Run() {
 		}
 	case "startnode":
 		err := startNodeCmd.Parse(os.Args[2:])
-		if err != nil {
-			log.Panic(err)
-		}
-	case "createcontract":
-		err := createContractCmd.Parse(os.Args[2:])
-		if err != nil {
-			log.Panic(err)
-		}
-	case "approvecontract":
-		err := approveContractCmd.Parse(os.Args[2:])
 		if err != nil {
 			log.Panic(err)
 		}
@@ -450,21 +344,5 @@ func (cli *CommandLine) Run() {
 			runtime.Goexit()
 		}
 		cli.startNode(nodeID, *startNodeMiner)
-	}
-
-	if createContractCmd.Parsed() {
-		if *createContractTitle == "" || *createContractDescription == "" || *createContractCreator == "" || *createContractParties == "" {
-			createContractCmd.Usage()
-			runtime.Goexit()
-		}
-		cli.createContract(*createContractTitle, *createContractDescription, *createContractCreator, *createContractParties, nodeID)
-	}
-
-	if approveContractCmd.Parsed() {
-		if *approveContractID == "" || *approveContractApprover == "" {
-			approveContractCmd.Usage()
-			runtime.Goexit()
-		}
-		cli.approveContract(*approveContractID, *approveContractApprover, nodeID)
 	}
 }
