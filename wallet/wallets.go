@@ -58,4 +58,3 @@ func (ws Wallets) GetWallet(address string) (Wallet, error) {
 	}
 	return *ws.Wallets[address], nil
 }
-

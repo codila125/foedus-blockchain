@@ -137,4 +137,3 @@ func (cli *CommandLine) printBlockFooter() {
 	*/
 	fmt.Println("╚" + "═══════════════════════════════════════════════════════════════")
 }
-

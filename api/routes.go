@@ -31,4 +31,3 @@ func Start(port string) error {
 	log.Printf("[SERVER] Starting server node in PORT%s\n", port)
 	return http.ListenAndServe(port, r)
 }
-

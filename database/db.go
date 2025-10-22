@@ -1,4 +1,4 @@
-// Package db implements the database layer for the Foedus blockchain using PebbleDB.
+// Package database implements the database layer for the Foedus blockchain using PebbleDB.
 package database
 
 import (
@@ -14,14 +14,14 @@ type PebbleDB struct {
 
 // DBExists checks if a PebbleDB exists at the specified path.
 func DBExists(dbPath string) bool {
-    // Check if directory exists
-    if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-        return false
-    }
-    // Check for Pebble marker files (MANIFEST or CURRENT)
-    manifestPath := filepath.Join(dbPath, "CURRENT")
-    _, err := os.Stat(manifestPath)
-    return err == nil
+	// Check if directory exists
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		return false
+	}
+	// Check for Pebble marker files (MANIFEST or CURRENT)
+	manifestPath := filepath.Join(dbPath, "CURRENT")
+	_, err := os.Stat(manifestPath)
+	return err == nil
 }
 
 // OpenDB opens a PebbleDB at the specified path.

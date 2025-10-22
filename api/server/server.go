@@ -241,4 +241,3 @@ func CloseDB(chain *blockchain.BlockChain) {
 		log.Printf("[SERVER] Database closed successfully")
 	})
 }
-

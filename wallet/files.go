@@ -73,3 +73,4 @@ func (ws *Wallets) SaveFile(nodeID string) error {
 	}
 	return nil
 }
+
