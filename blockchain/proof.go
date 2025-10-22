@@ -1,7 +1,6 @@
 package blockchain
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
 	"log"
@@ -32,17 +31,20 @@ func (pow *ProofOfWork) InitData(nonce int) []byte {
 	/*
 		Initializes the data for the Proof of Work algorithm with the given nonce.
 	*/
-	data := bytes.Join(
-		[][]byte{
-			pow.Block.PrevHash,
-			pow.Block.HashTransactions(), // Merkle root of transactions
-			pow.Block.HashContracts(),    // Merkle root of contracts
-			ToHex(int64(nonce)),
-			ToHex(int64(Difficulty)),
-		},
-		[]byte{},
-	)
-	return data
+	buffer := make([]byte, 0, 128) // Pre-allocate buffer with sufficient capacity
+	buffer = append(buffer, pow.Block.PrevHash...)
+	buffer = append(buffer, pow.Block.HashTransactions()...) // Merkle root of transactions
+	buffer = append(buffer, pow.Block.HashContracts()...)    // Merkle root of contracts
+	
+	nonceBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(nonceBytes, uint64(nonce))
+	buffer = append(buffer, nonceBytes...)
+	
+	difficultyBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(difficultyBytes, uint64(Difficulty))
+	buffer = append(buffer, difficultyBytes...)
+	
+	return buffer
 }
 
 func (pow *ProofOfWork) Validate() bool {
@@ -58,19 +60,6 @@ func (pow *ProofOfWork) Validate() bool {
 	intHash.SetBytes(hash[:])
 
 	return intHash.Cmp(pow.Target) == -1
-}
-
-func ToHex(num int64) []byte {
-	/*
-		Converts an int64 number to a byte slice in big-endian order.
-	*/
-	buffer := new(bytes.Buffer)
-	err := binary.Write(buffer, binary.BigEndian, int64(num))
-	if err != nil {
-		log.Panic(err)
-	}
-
-	return buffer.Bytes()
 }
 
 func (pow *ProofOfWork) Run() (int, []byte) {

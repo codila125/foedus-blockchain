@@ -115,12 +115,10 @@ func (contract *Contract) SignContract(privKey *ecdsa.PrivateKey, partyAddress [
 
 	// Create a copy without existing signatures for hashing
 	ctCopy := *contract
-
-	// Deep copy the parties slice to avoid modifying the original
 	ctCopy.Parties = make([]*Party, len(contract.Parties))
-	for i := range contract.Parties {
-		partyCopy := *contract.Parties[i]
-		partyCopy.Signature = []byte{}
+	for i, party := range contract.Parties {
+		partyCopy := *party
+		partyCopy.Signature = nil // Clear signature for hashing
 		ctCopy.Parties[i] = &partyCopy
 	}
 
@@ -137,23 +135,17 @@ func (contract *Contract) SignContract(privKey *ecdsa.PrivateKey, partyAddress [
 	signature := append(r.Bytes(), s.Bytes()...)
 
 	// Find and update the party's signature
-	found := false
 	for i := range contract.Parties {
-		if bytes.Equal([]byte(contract.Parties[i].Address), partyAddress) {
+		if contract.Parties[i].Address == string(partyAddress) {
 			contract.Parties[i].Signature = signature
-			found = true
-			log.Printf("[CONTRACT] ✓ Contract signed by party: %x", partyAddress)
-			break
+			log.Printf("[CONTRACT] ✓ Contract signed by party: %s", contract.Parties[i].Address)
+			contract.UpdatedAt = time.Now().Unix()
+			return nil
 		}
 	}
 
-	if !found {
-		log.Printf("[CONTRACT] ✗ Party not found in contract: %x", partyAddress)
-		return fmt.Errorf("[CONTRACT] ✗ Party not found in contract: %x", partyAddress)
-	}
-
-	contract.UpdatedAt = time.Now().Unix()
-	return nil
+	log.Printf("[CONTRACT] ✗ Party not found in contract: %s", string(partyAddress))
+	return fmt.Errorf("[CONTRACT] ✗ Party not found in contract: %s", string(partyAddress))
 }
 
 func (blockchain *BlockChain) VerifyContract(contract *Contract) bool {
@@ -246,9 +238,9 @@ func (contract *Contract) VerifyContractSignature(partyAddress []byte, pubKeyByt
 	ctCopy := *contract
 	// Deep copy the parties slice to avoid modifying the original
 	ctCopy.Parties = make([]*Party, len(contract.Parties))
-	for i := range contract.Parties {
-		partyCopy := *contract.Parties[i]
-		partyCopy.Signature = []byte{}
+	for i, party := range contract.Parties {
+		partyCopy := *party
+		partyCopy.Signature = nil // Clear signature for hashing
 		ctCopy.Parties[i] = &partyCopy
 	}
 
@@ -292,7 +284,7 @@ func (contract *Contract) GetUnsignedParties() []*Party {
 	/*
 	   Returns a list of parties that have not yet signed the contract.
 	*/
-	var unsigned []*Party
+	unsigned := make([]*Party, 0)
 
 	for _, party := range contract.Parties {
 		if len(party.Signature) == 0 {

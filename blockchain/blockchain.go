@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	DBPath      = "./temp/blocks_%s"
-	genesisData = "Genesis Foedus"
+	DBPath        = "./temp/blocks_%s"
+	genesisData   = "Genesis Foedus"
+	LastHashKey   = "lh" // Key to store the last block hash
 )
 
 type BlockChain struct {
@@ -62,7 +63,7 @@ func NewBlockChain(address string, nodeID string) *BlockChain {
 
 	err = batch.Set(genesis.Hash, genesis.SerializeBlock(), nil) // Store the genesis block in the database
 	Handle(err)
-	err = batch.Set([]byte("lh"), genesis.Hash, nil) // Store the last hash pointer because it helps to find the last block
+	err = batch.Set([]byte(LastHashKey), genesis.Hash, nil) // Store the last hash pointer because it helps to find the last block
 	Handle(err)
 	lastHash = genesis.Hash // Set the last hash to the genesis block's hash
 
@@ -93,7 +94,7 @@ func ContinueBlockChain(nodeID string) *BlockChain {
 	Handle(err)
 
 	// Read the last hash from the database
-	lastHashBytes, err := db.Get([]byte("lh"))
+	lastHashBytes, err := db.Get([]byte(LastHashKey))
 	if err == nil {
 		lastHash = make([]byte, len(lastHashBytes))
 		copy(lastHash, lastHashBytes)
@@ -138,14 +139,13 @@ func (blockchain *BlockChain) MineBlock(transactions []*Transaction, contracts [
 	db := blockchain.Database.GetRawDB()
 
 	// Get the last hash from the database
-	lastHashBytes, closer, err := db.Get([]byte("lh"))
-	if err == nil {
-		lastHash = make([]byte, len(lastHashBytes))
-		copy(lastHash, lastHashBytes)
-		closer.Close()
-	} else {
+	lastHashBytes, closer, err := db.Get([]byte(LastHashKey))
+	if err != nil {
 		log.Panicf("[BLOCKCHAIN] Failed to retrieve last hash: %v", err)
 	}
+	lastHash = make([]byte, len(lastHashBytes))
+	copy(lastHash, lastHashBytes)
+	closer.Close()
 
 	lastBlockData, closer, err := db.Get(lastHash)
 	if err != nil {
@@ -164,7 +164,7 @@ func (blockchain *BlockChain) MineBlock(transactions []*Transaction, contracts [
 	defer batch.Close()
 
 	batch.Set(newBlock.Hash, newBlock.SerializeBlock(), nil)
-	batch.Set([]byte("lh"), newBlock.Hash, nil)
+	batch.Set([]byte(LastHashKey), newBlock.Hash, nil)
 
 	blockchain.LastHash = newBlock.Hash
 	log.Printf("[MINING] Block mined successfully - Hash: %x, Height: %d", newBlock.Hash, newBlock.Height)
@@ -204,7 +204,7 @@ func (blockchain *BlockChain) AddBlock(block *Block) error {
 		return err
 	}
 
-	lastHash, closer, err := db.Get([]byte("lh"))
+	lastHash, closer, err := db.Get([]byte(LastHashKey))
 	if err != nil {
 		return fmt.Errorf("could not get last hash: %w", err)
 	}
@@ -228,7 +228,7 @@ func (blockchain *BlockChain) AddBlock(block *Block) error {
 
 	// Update the last hash only if the new block's height is greater
 	if block.Height > lastBlock.Height {
-		err = batch.Set([]byte("lh"), block.Hash, nil)
+		err = batch.Set([]byte(LastHashKey), block.Hash, nil)
 		if err != nil {
 			return fmt.Errorf("could not update last hash: %w", err)
 		}

@@ -14,22 +14,22 @@ func (iter *BlockChainIterator) Next() *Block {
 		Update the iterator's current hash to the previous block's hash for the next call.
 		Return the deserialized block.
 	*/
-    db := iter.Database.GetRawDB()
-    
-    blockData, closer, err := db.Get(iter.CurrentHash)
-    if err != nil {
-        Handle(err)
-    }
-    defer closer.Close()
+	db := iter.Database.GetRawDB()
+	
+	blockData, closer, err := db.Get(iter.CurrentHash)
+	if err != nil {
+		Handle(err)
+	}
+	
+	// Copy data immediately since closer will be deferred closed
+	blockDataCopy := make([]byte, len(blockData))
+	copy(blockDataCopy, blockData)
+	closer.Close()
 
-    // Copy data before closing the closer
-    blockDataCopy := make([]byte, len(blockData))
-    copy(blockDataCopy, blockData)
+	block := DeserializeBlock(blockDataCopy)
 
-    block := DeserializeBlock(blockDataCopy)
+	// Move to the previous block for next iteration
+	iter.CurrentHash = block.PrevHash
 
-    // Move to the previous block for next iteration
-    iter.CurrentHash = block.PrevHash
-
-    return block
+	return block
 }

@@ -11,14 +11,13 @@ func (b *Block) HashTransactions() []byte {
 		Computes the Merkle root of the block's transactions.
 		Returns the Merkle root as a byte slice.
 	*/
-	var transactions [][]byte
-
-	// Serialize each transaction and collect them
-	for _, tx := range b.Transactions {
-		transactions = append(transactions, tx.ID)
-	}
-	if len(transactions) == 0 {
+	if len(b.Transactions) == 0 {
 		return []byte{}
+	}
+	
+	transactions := make([][]byte, len(b.Transactions))
+	for i, tx := range b.Transactions {
+		transactions[i] = tx.ID
 	}
 	tree := merkle.NewMerkleTree(transactions) // Create a new Merkle tree from the transactions
 
@@ -30,14 +29,13 @@ func (b *Block) HashContracts() []byte {
 		Computes the Merkle root of the block's contracts.
 		Returns the Merkle root as a byte slice.
 	*/
-	var contracts [][]byte
-
-	// Serialize each contract and collect them
-	for _, ct := range b.Contracts {
-		contracts = append(contracts, ct.ID)
-	}
-	if len(contracts) == 0 {
+	if len(b.Contracts) == 0 {
 		return []byte{}
+	}
+	
+	contracts := make([][]byte, len(b.Contracts))
+	for i, ct := range b.Contracts {
+		contracts[i] = ct.ID
 	}
 
 	tree := merkle.NewMerkleTree(contracts) // Create a new Merkle tree from the contracts
@@ -60,17 +58,18 @@ func (ct *Contract) HashContract() []byte {
 		CreatedAt:      ct.CreatedAt,
 	}
 
-	// Populate MilestonesCore from ct.Milestones
+	// Populate MilestonesCore from ct.Milestones (pre-allocate)
 	core.Milestones = make([]*MilestoneCore, len(ct.Milestones))
 	for i, m := range ct.Milestones {
 		core.Milestones[i] = &MilestoneCore{
 			Title:       m.Title,
 			Description: m.Description,
 			Value:       m.Value,
+			CreatedAt:   m.CreatedAt,
 		}
 	}
 
-	// Populate PartiesCore from ct.Parties
+	// Populate PartiesCore from ct.Parties (pre-allocate)
 	core.Parties = make([]*PartyCore, len(ct.Parties))
 	for i, p := range ct.Parties {
 		core.Parties[i] = &PartyCore{

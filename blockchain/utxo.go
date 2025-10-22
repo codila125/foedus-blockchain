@@ -20,7 +20,7 @@ func (blockchain *BlockChain) FindUTXO() map[string]TxOutputs {
 		Returns a map where the key is the transaction ID and the value is the corresponding unspent outputs.
 	*/
 	UTXO := make(map[string]TxOutputs) // UTXO map to hold unspent transaction outputs
-	spentTXs := make(map[string][]int) // Map to track spent transaction outputs
+	spentTXs := make(map[string]map[int]bool) // Map to track spent transaction outputs for O(1) lookup
 
 	iterator := blockchain.Iterator() // Create an iterator to traverse the blockchain
 
@@ -30,15 +30,10 @@ func (blockchain *BlockChain) FindUTXO() map[string]TxOutputs {
 		for _, tx := range block.Transactions { // Iterate over each transaction in the block
 			txID := hex.EncodeToString(tx.ID) // Encode transaction ID to string
 
-		Outputs:
 			for outIdx, out := range tx.Outputs { // Iterate over each output in the transaction
 				// If the output is already spent, skip it
-				if spentTXs[txID] != nil {
-					for _, spentOut := range spentTXs[txID] {
-						if spentOut == outIdx {
-							continue Outputs
-						}
-					}
+				if spentTXs[txID] != nil && spentTXs[txID][outIdx] {
+					continue
 				}
 				outs := UTXO[txID]                       // Initialize outputs for this transaction ID
 				outs.Outputs = append(outs.Outputs, out) // Add the unspent output
@@ -48,7 +43,10 @@ func (blockchain *BlockChain) FindUTXO() map[string]TxOutputs {
 			if !tx.IsCoinbaseTx() {
 				for _, in := range tx.Inputs {
 					inTxID := hex.EncodeToString(in.ID)
-					spentTXs[inTxID] = append(spentTXs[inTxID], in.Out) // Mark the output as spent
+					if spentTXs[inTxID] == nil {
+						spentTXs[inTxID] = make(map[int]bool)
+					}
+					spentTXs[inTxID][in.Out] = true // Mark the output as spent
 				}
 			}
 		}
