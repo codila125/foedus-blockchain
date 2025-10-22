@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/codila125/foedus-blockchain/merkle"
 	"github.com/codila125/foedus-blockchain/protobuf"
 	"google.golang.org/protobuf/proto"
 )
@@ -54,7 +55,7 @@ func (b *Block) HashTransactions() []byte {
 	if len(transactions) == 0 {
 		return []byte{}
 	}
-	tree := NewMerkleTree(transactions) // Create a new Merkle tree from the transactions
+	tree := merkle.NewMerkleTree(transactions) // Create a new Merkle tree from the transactions
 
 	return tree.RootNode.Data
 }
@@ -74,7 +75,7 @@ func (b *Block) HashContracts() []byte {
 		return []byte{}
 	}
 
-	tree := NewMerkleTree(contracts) // Create a new Merkle tree from the contracts
+	tree := merkle.NewMerkleTree(contracts) // Create a new Merkle tree from the contracts
 
 	return tree.RootNode.Data
 }

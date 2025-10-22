@@ -1,4 +1,5 @@
-package blockchain
+// Package merkle implements a simple Merkle tree structure for data integrity verification.
+package merkle
 
 import (
 	"crypto/sha256"
