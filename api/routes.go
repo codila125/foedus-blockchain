@@ -27,7 +27,11 @@ func RegisterRoutes(handler *handler.Handler) *chi.Mux {
 	return r
 }
 
-func Start(port string) error {
-	log.Printf("[SERVER] Starting server node in PORT%s\n", port)
-	return http.ListenAndServe(port, r)
+// StartServer creates and returns an HTTP server instance
+func StartServer(port string) *http.Server {
+	log.Printf("[SERVER] Starting server node on PORT%s\n", port)
+	return &http.Server{
+		Addr:    port,
+		Handler: r,
+	}
 }

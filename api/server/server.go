@@ -5,14 +5,10 @@ import (
 	"context"
 	"encoding/hex"
 	"log"
-	"os"
-	"runtime"
-	"syscall"
 	"time"
 
 	"github.com/codila125/foedus-blockchain/blockchain"
 	"github.com/codila125/foedus-blockchain/wallet"
-	"github.com/vrecan/death/v3"
 )
 
 type Server struct {
@@ -22,7 +18,6 @@ type Server struct {
 
 func NewServer(port string) *Server {
 	chain := blockchain.ContinueBlockChain(port)
-	go CloseDB(chain)
 	return &Server{
 		port:  port,
 		chain: chain,
@@ -225,18 +220,43 @@ func (s *Server) ContractStatus(ctx context.Context, contractID string) (Contrac
 	return ContractResponse(contract), nil
 }
 
-func CloseDB(chain *blockchain.BlockChain) {
-	/*
-		If a termination signal is received, this function ensures that the
-		blockchain database is properly closed before exiting the program.
-		Termination signals like SIGINT (Ctrl+C) and SIGTERM are handled.
-	*/
-	d := death.NewDeath(syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
+// Close gracefully closes the database and associated resources
+func (s *Server) Close(ctx context.Context) error {
+	log.Println("[SERVER] Closing server resources...")
 
-	d.WaitForDeathWithFunc(func() {
-		defer os.Exit(1)       // Exit with a non-zero status to indicate termination
-		defer runtime.Goexit() // Ensure all goroutines are terminated
-		log.Printf("[SERVER] Shutting down node, closing database...")
-		_ = chain.Database.Close() // Close the blockchain database
-	})
+	if s.chain == nil {
+		log.Println("[SERVER] Blockchain is nil, skipping close")
+		return nil
+	}
+
+	if s.chain.Database == nil {
+		log.Println("[SERVER] Database is nil, skipping close")
+		return nil
+	}
+
+	// Close database with timeout
+	dbCloseDone := make(chan error, 1)
+	go func() {
+		dbCloseDone <- s.chain.Database.Close()
+	}()
+
+	select {
+	case err := <-dbCloseDone:
+		if err != nil {
+			log.Printf("[SERVER] Error closing database: %v", err)
+			return err
+		}
+		log.Println("[SERVER] Database closed successfully")
+	case <-ctx.Done():
+		log.Println("[SERVER] Database closure timeout exceeded")
+		return ctx.Err()
+	}
+
+	return nil
 }
+
+// GetChain returns the blockchain instance
+func (s *Server) GetChain() *blockchain.BlockChain {
+	return s.chain
+}
+

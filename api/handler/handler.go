@@ -2,7 +2,6 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 
@@ -13,19 +12,17 @@ import (
 )
 
 type Handler struct {
-	ctx    context.Context
 	server *server.Server
 }
 
 func NewHandler(server *server.Server) *Handler {
 	return &Handler{
-		ctx:    context.Background(),
 		server: server,
 	}
 }
 
 func (h *Handler) CreateWallet(w http.ResponseWriter, r *http.Request) {
-	address, err := h.server.CreateWallet(h.ctx)
+	address, err := h.server.CreateWallet(r.Context())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -41,7 +38,7 @@ func (h *Handler) CreateWallet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ListAddresses(w http.ResponseWriter, r *http.Request) {
-	addresses, err := h.server.ListAddresses(h.ctx)
+	addresses, err := h.server.ListAddresses(r.Context())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -57,7 +54,7 @@ func (h *Handler) ListAddresses(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) PrintChain(w http.ResponseWriter, r *http.Request) {
-	blocks := h.server.PrintChain(h.ctx)
+	blocks := h.server.PrintChain(r.Context())
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -76,7 +73,7 @@ func (h *Handler) GetBalance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	balance, err := h.server.GetBalance(h.ctx, address)
+	balance, err := h.server.GetBalance(r.Context(), address)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -111,7 +108,7 @@ func (h *Handler) CreateContract(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	contractID, err := h.server.CreateContract(h.ctx, req)
+	contractID, err := h.server.CreateContract(r.Context(), req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -129,7 +126,7 @@ func (h *Handler) CreateContract(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetContract(w http.ResponseWriter, r *http.Request) {
 	contractID := chi.URLParam(r, "contractID")
 
-	contract, err := h.server.ContractStatus(h.ctx, contractID)
+	contract, err := h.server.ContractStatus(r.Context(), contractID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -148,13 +145,13 @@ func (h *Handler) ApproveContract(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.server.ApproveContract(h.ctx, contractID, approver)
+	err := h.server.ApproveContract(r.Context(), contractID, approver)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	contract, err := h.server.ContractStatus(h.ctx, contractID)
+	contract, err := h.server.ContractStatus(r.Context(), contractID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -182,13 +179,13 @@ func (h *Handler) ApproveMilestone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.server.ApproveMilestone(h.ctx, contractID, milestoneID, approver, []byte(req.Evidence))
+	err := h.server.ApproveMilestone(r.Context(), contractID, milestoneID, approver, []byte(req.Evidence))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	contract, err := h.server.ContractStatus(h.ctx, contractID)
+	contract, err := h.server.ContractStatus(r.Context(), contractID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
