@@ -25,7 +25,7 @@ func (cli *CommandLine) printUsage() {
 	fmt.Println(" createwallet : creates a new Wallet")
 	fmt.Println(" listaddresses : lists the addresses in our wallet file")
 	fmt.Println(" reindex : rebuilds the UTXO and ICCT sets")
-	fmt.Println(" startnode -miner <ADDRESS> : starts a node with ID specified in NODE_ID env. var. -miner enables mining")
+	fmt.Println(" startnode -source <ADDRESS> : starts a node with ID specified in NODE_ID env. var. -miner enables mining")
 }
 
 func (cli *CommandLine) validateArgs() {
@@ -215,10 +215,11 @@ func (cli *CommandLine) startNode(nodeID string, minerAddress string) {
 		Starts a new node in the blockchain network.
 		If a miner address is provided, the node will also mine new blocks and send rewards to that address.
 	*/
-	if len(minerAddress) > 0 {
-		if !wallet.ValidateAddress(minerAddress) {
-			log.Panic("[CLI] Invalid miner address provided")
-		}
-	}
-	network.StartServer(nodeID, minerAddress)
+	// if len(minerAddress) > 0 {
+	// 	if !wallet.ValidateAddress(minerAddress) {
+	// 		log.Panic("[CLI] Invalid miner address provided")
+	// 	}
+	// }
+	// network.StartServer(nodeID, minerAddress)
+	network.RunMinerNode(nodeID, "", minerAddress)
 }

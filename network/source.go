@@ -1,0 +1,94 @@
+package network
+
+import (
+    "log"
+
+    "github.com/codila125/foedus-blockchain/blockchain"
+    "github.com/libp2p/go-libp2p"
+    "github.com/libp2p/go-libp2p/core/host"
+    "github.com/libp2p/go-libp2p/core/network"
+    peerstore "github.com/libp2p/go-libp2p/core/peer"
+multiaddr "github.com/multiformats/go-multiaddr"
+)
+
+func createSourceNode() host.Host {
+    node, err := libp2p.New(
+        libp2p.ListenAddrStrings(
+            "/ip4/0.0.0.0/tcp/8006",
+        ),
+    )
+    if err != nil {
+        panic(err)
+    }
+
+    return node
+}
+
+func RunSourceNode(chain *blockchain.BlockChain) host.Host {
+    sourceNode := createSourceNode()
+    printNodeID(sourceNode)
+    printNodeAddresses(sourceNode)
+    peerInfo := peerstore.AddrInfo{
+        ID:    sourceNode.ID(),
+        Addrs: sourceNode.Addrs(),
+    }
+    addrs, err := peerstore.AddrInfoToP2pAddrs(&peerInfo)
+    if err != nil {
+        log.Println("Error converting AddrInfo to P2P addresses:", err)
+        return nil
+    }
+    log.Printf("[SOURCE NODE] Source Node Multiaddresses:")
+    for _, addr := range addrs {
+        log.Printf("[SOURCE NODE] Address: %s", addr.String())
+    }
+
+    // Set up peer connection event listeners
+    SetupPeerEventListeners(sourceNode)
+
+    HandleNetworkRequests(sourceNode, chain)
+
+    return sourceNode
+}
+
+// SetupPeerEventListeners sets up listeners for peer connect/disconnect events
+func SetupPeerEventListeners(h host.Host) {
+    notifee := &PeerNotifee{
+        host: h,
+    }
+    h.Network().Notify(notifee)
+}
+
+// PeerNotifee implements network.Notifiee to listen for peer events
+type PeerNotifee struct {
+    host host.Host
+}
+
+// Listen is called when the network starts listening on a new multiaddr
+func (p *PeerNotifee) Listen(network.Network, multiaddr.Multiaddr) {}
+
+// ListenClose is called when the network stops listening on a multiaddr
+func (p *PeerNotifee) ListenClose(network.Network, multiaddr.Multiaddr) {}
+
+// Connected is called when a connection is established
+func (p *PeerNotifee) Connected(net network.Network, conn network.Conn) {
+    remotePeer := conn.RemotePeer()
+    remoteAddr := conn.RemoteMultiaddr()
+    
+    log.Printf("[SOURCE NODE] ✓ Peer connected: %s", remotePeer.String())
+    log.Printf("[SOURCE NODE]   Remote Address: %s", remoteAddr.String())
+    log.Printf("[SOURCE NODE]   Total peers: %d", len(p.host.Network().Peers()))
+}
+
+// Disconnected is called when a connection is closed
+func (p *PeerNotifee) Disconnected(net network.Network, conn network.Conn) {
+    remotePeer := conn.RemotePeer()
+    
+    log.Printf("[SOURCE NODE] ✗ Peer disconnected: %s", remotePeer.String())
+    log.Printf("[SOURCE NODE]   Total peers: %d", len(p.host.Network().Peers()))
+}
+
+// OpenedStream is called when a stream is opened
+func (p *PeerNotifee) OpenedStream(net network.Network, stream network.Stream) {}
+
+// ClosedStream is called when a stream is closed
+func (p *PeerNotifee) ClosedStream(net network.Network, stream network.Stream) {}

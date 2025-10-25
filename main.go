@@ -14,6 +14,8 @@ import (
 	"github.com/codila125/foedus-blockchain/api/handler"
 	"github.com/codila125/foedus-blockchain/api/server"
 	"github.com/codila125/foedus-blockchain/cli"
+	"github.com/codila125/foedus-blockchain/network"
+	"github.com/libp2p/go-libp2p/core/host"
 )
 
 const (
@@ -34,9 +36,11 @@ func main() {
 	}
 
 	serve := server.NewServer(nodeID)
+	chain := serve.GetChain()
 	handle := handler.NewHandler(serve)
 	api.RegisterRoutes(handle)
 	srv := api.StartServer(":" + nodeID)
+	sourceNode := network.RunSourceNode(chain)
 
 	// Start the HTTP server in a goroutine
 	serverErrors := make(chan error, 1)
@@ -48,11 +52,11 @@ func main() {
 	}()
 
 	// Set up graceful shutdown
-	gracefulShutdown(srv, serve, serverErrors)
+	gracefulShutdown(srv, serve, serverErrors, sourceNode)
 }
 
 // gracefulShutdown handles signal interrupts and orchestrates resource cleanup
-func gracefulShutdown(srv *http.Server, appServer *server.Server, serverErrors chan error) {
+func gracefulShutdown(srv *http.Server, appServer *server.Server, serverErrors chan error, sourceNode host.Host) {
 	shutdownChan := make(chan os.Signal, 1)
 	signal.Notify(shutdownChan, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 
@@ -60,13 +64,13 @@ func gracefulShutdown(srv *http.Server, appServer *server.Server, serverErrors c
 	case err := <-serverErrors:
 		log.Fatalf("[SERVER] Server error: %v", err)
 	case sig := <-shutdownChan:
-		log.Printf("[SERVER] Received shutdown signal: %v", sig)
-		shutdown(srv, appServer)
+		log.Printf("[SERVER] Shutting down: %v", sig)
+		shutdown(srv, appServer, sourceNode)
 	}
 }
 
 // shutdown orchestrates the graceful shutdown sequence
-func shutdown(srv *http.Server, appServer *server.Server) {
+func shutdown(srv *http.Server, appServer *server.Server, sourceNode host.Host) {
 	var wg sync.WaitGroup
 
 	// Create a context with timeout for the entire shutdown process
@@ -82,6 +86,16 @@ func shutdown(srv *http.Server, appServer *server.Server) {
 			log.Printf("[SERVER] HTTP server shutdown error: %v", err)
 		} else {
 			log.Println("[SERVER] HTTP server shut down successfully")
+		}
+	})
+
+	// Close the libp2p source node
+	wg.Go(func() {
+		log.Println("[SERVER] Closing libp2p source node...")
+		if err := sourceNode.Close(); err != nil {
+			log.Printf("[SERVER] Error closing source node: %v", err)
+		} else {
+			log.Println("[SERVER] Libp2p source node closed successfully")
 		}
 	})
 
@@ -108,4 +122,3 @@ func shutdown(srv *http.Server, appServer *server.Server) {
 		os.Exit(1)
 	}
 }
-
