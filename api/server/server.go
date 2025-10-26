@@ -7,20 +7,25 @@ import (
 	"log"
 	"time"
 
+	"github.com/codila125/foedus-blockchain/network"
 	"github.com/codila125/foedus-blockchain/blockchain"
 	"github.com/codila125/foedus-blockchain/wallet"
+	"github.com/libp2p/go-libp2p/core/host"
 )
 
 type Server struct {
-	port  string
-	chain *blockchain.BlockChain
+	port      string
+	sourceNode host.Host
+	chain     *blockchain.BlockChain
 }
 
 func NewServer(port string) *Server {
 	chain := blockchain.ContinueBlockChain(port)
+	sourceNode := network.RunSourceNode(chain)
 	return &Server{
-		port:  port,
-		chain: chain,
+		port:      port,
+		chain:     chain,
+		sourceNode: sourceNode,
 	}
 }
 
