@@ -26,8 +26,8 @@ func createSourceNode() host.Host {
 
 func RunSourceNode(chain *blockchain.BlockChain) host.Host {
     sourceNode := createSourceNode()
-    printNodeID(sourceNode)
-    printNodeAddresses(sourceNode)
+    PrintNodeID(sourceNode)
+    PrintNodeAddresses(sourceNode)
     peerInfo := peerstore.AddrInfo{
         ID:    sourceNode.ID(),
         Addrs: sourceNode.Addrs(),

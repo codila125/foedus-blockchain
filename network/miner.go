@@ -33,8 +33,8 @@ func createMinerNode() host.Host {
 func RunMinerNode(port, walletAddress, Address string) {
     log.Printf("[MINER] Starting node with mining enabled for address: %s", Address)
     minerNode := createMinerNode()
-    printNodeID(minerNode)
-    printNodeAddresses(minerNode)
+    PrintNodeID(minerNode)
+    PrintNodeAddresses(minerNode)
     addr, err := multiaddr.NewMultiaddr(Address)
     if err != nil {
         panic(err)
@@ -62,7 +62,6 @@ func RunMinerNode(port, walletAddress, Address string) {
         log.Printf("[BLOCKCHAIN] Existing blockchain found for node %s", port)
     }
     
-    log.Printf("[BLOCKCHAIN] Loading existing blockchain for node %s", port)
     chain := blockchain.ContinueBlockChain(port)
     defer chain.Database.Close()
 
