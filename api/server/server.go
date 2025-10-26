@@ -7,24 +7,24 @@ import (
 	"log"
 	"time"
 
-	"github.com/codila125/foedus-blockchain/network"
 	"github.com/codila125/foedus-blockchain/blockchain"
+	"github.com/codila125/foedus-blockchain/network"
 	"github.com/codila125/foedus-blockchain/wallet"
 	"github.com/libp2p/go-libp2p/core/host"
 )
 
 type Server struct {
-	port      string
+	port       string
 	sourceNode host.Host
-	chain     *blockchain.BlockChain
+	chain      *blockchain.BlockChain
 }
 
 func NewServer(port string) *Server {
 	chain := blockchain.ContinueBlockChain(port)
-	sourceNode := network.RunSourceNode(chain)
+	sourceNode := network.RunSourceNode(chain, port)
 	return &Server{
-		port:      port,
-		chain:     chain,
+		port:       port,
+		chain:      chain,
 		sourceNode: sourceNode,
 	}
 }
@@ -138,10 +138,10 @@ func (s *Server) CreateContract(ctx context.Context, req CreateContractReq) (str
 	}
 
 	contract := blockchain.CreateContract(req.Title, req.Description, &creatorWallet, milestones, party, []byte(req.Terms), attachments)
-	cts := []*blockchain.Contract{contract} // Include the contract transaction in the new block
-	block := s.chain.MineBlock(nil, cts)    // Mine a new block with the contract transaction
 
-	log.Printf("[SERVER] Contract created and included in block %x", block.Hash)
+	network.HandleSendContractRequest(s.sourceNode, contract)
+
+	log.Printf("[SERVER] Contract created successfully with ID: %x", contract.ID)
 
 	return hex.EncodeToString(contract.ID), nil
 }
@@ -169,10 +169,9 @@ func (s *Server) ApproveContract(ctx context.Context, contractID string, approve
 		return err
 	}
 
-	cts := []*blockchain.Contract{&contract} // Include the updated contract transaction in the new block
-	block := s.chain.MineBlock(nil, cts)     // Mine a new block with the updated contract transaction
+	network.HandleSendContractRequest(s.sourceNode, &contract)
 
-	log.Printf("[SERVER] Contract ID %s approved by %s and included in block %x", contractID, approverAddress, block.Hash)
+	log.Printf("[SERVER] Contract ID %s approved by %s", contractID, approverAddress)
 	return nil
 }
 
@@ -204,10 +203,9 @@ func (s *Server) ApproveMilestone(ctx context.Context, contractID string, milest
 		return err
 	}
 
-	cts := []*blockchain.Contract{updatedContract} // Include the updated contract transaction in the new block
-	block := s.chain.MineBlock(nil, cts)           // Mine a new block with the updated contract transaction
+	network.HandleSendContractRequest(s.sourceNode, updatedContract)
 
-	log.Printf("[SERVER] Milestone ID %s in contract ID %s approved by %s and included in block %x", milestoneID, contractID, approverAddress, block.Hash)
+	log.Printf("[SERVER] Milestone ID %s in contract ID %s approved by %s", milestoneID, contractID, approverAddress)
 	return nil
 }
 
@@ -264,4 +262,3 @@ func (s *Server) Close(ctx context.Context) error {
 func (s *Server) GetChain() *blockchain.BlockChain {
 	return s.chain
 }
-

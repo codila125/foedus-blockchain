@@ -17,6 +17,12 @@ import (
 
 const protocolID = "/foedus/1.0.0"
 
+func init() {
+	// Register types for gob encoding/decoding
+	gob.Register(&blockchain.Contract{})
+	gob.Register(&blockchain.Block{})
+}
+
 // PrintNodeID logs the node's unique identifier
 func PrintNodeID(host host.Host) {
 	log.Printf("[NETWORK] Node ID: %s", host.ID().String())
@@ -106,7 +112,7 @@ func SendBlocks(encoder *gob.Encoder, blockHashes [][]byte, getBlock func([]byte
 		}
 
 		blockData := map[string]any{
-			"command": "block",
+			"command": "NEW_BLOCK",
 			"hash":    block.Hash,
 			"height":  block.Height,
 			"data":    block.SerializeBlock(),
@@ -118,7 +124,7 @@ func SendBlocks(encoder *gob.Encoder, blockHashes [][]byte, getBlock func([]byte
 	}
 
 	// Send completion signal
-	if err := encoder.Encode(map[string]interface{}{"command": "done"}); err != nil {
+	if err := encoder.Encode(map[string]any{"command": "done"}); err != nil {
 		return fmt.Errorf("failed to send completion signal: %w", err)
 	}
 
@@ -202,4 +208,410 @@ func HandleGetBlockchainRequest(s network.Stream, chain *blockchain.BlockChain) 
 	}
 
 	log.Printf("[NETWORK] Blockchain transmission complete")
+}
+
+// HandleGetBlocksRequest responds with only blocks after the requested height
+func HandleGetBlocksRequest(s network.Stream, chain *blockchain.BlockChain) {
+	defer s.Close()
+
+	// Receive the height from requester
+	decoder := gob.NewDecoder(s)
+	var heightData map[string]any
+	if err := decoder.Decode(&heightData); err != nil {
+		log.Printf("[NETWORK] Error decoding height request: %v", err)
+		return
+	}
+
+	requestedHeight, ok := heightData["height"].(int)
+	if !ok {
+		log.Printf("[NETWORK] Invalid height data received")
+		return
+	}
+
+	log.Printf("[NETWORK] Peer %s requesting blocks after height %d", s.Conn().RemotePeer(), requestedHeight)
+
+	// Get all block hashes
+	allBlockHashes := chain.GetBlockHashes()
+
+	// Filter to only send blocks with height > requestedHeight
+	var blocksToSend [][]byte
+	for _, hash := range allBlockHashes {
+		block, err := chain.GetBlock(hash)
+		if err != nil {
+			log.Printf("[NETWORK] Error retrieving block %x: %v", hash, err)
+			continue
+		}
+
+		if block.Height > requestedHeight {
+			blocksToSend = append(blocksToSend, hash)
+		}
+	}
+
+	log.Printf("[NETWORK] Sending %d blocks (after height %d) to peer %s", len(blocksToSend), requestedHeight, s.Conn().RemotePeer())
+
+	encoder := gob.NewEncoder(s)
+
+	// Send filtered blocks
+	if err := SendBlocks(encoder, blocksToSend, chain.GetBlock); err != nil {
+		log.Printf("[NETWORK] Error sending blocks: %v", err)
+		return
+	}
+
+	log.Printf("[NETWORK] Block transmission complete")
+}
+
+// VersionInfo represents the blockchain version information
+type VersionInfo struct {
+	BestHeight int    // Height of the latest block
+	LastHash   []byte // Hash of the latest block
+	NodeID     string // Identifier of the node
+}
+
+// RequestVersionFromPeers requests blockchain version from all connected peers
+func RequestVersionFromPeers(node host.Host, chain *blockchain.BlockChain) map[peerstore.ID]VersionInfo {
+	peers := node.Peerstore().Peers()
+	versions := make(map[peerstore.ID]VersionInfo)
+
+	localHeight := chain.GetBestHeight()
+
+	// Count only connected peers
+	connectedPeers := 0
+	for _, peerID := range peers {
+		if peerID != node.ID() && node.Network().Connectedness(peerID) == network.Connected {
+			connectedPeers++
+		}
+	}
+
+	log.Printf("[NETWORK] Requesting versions from %d connected peers (local height: %d)", connectedPeers, localHeight)
+
+	for _, peerID := range peers {
+		if peerID == node.ID() {
+			continue // Skip self
+		}
+
+		// Check if peer is actually connected
+		if node.Network().Connectedness(peerID) != network.Connected {
+			log.Printf("[NETWORK] Skipping disconnected peer %s", peerID)
+			continue
+		}
+
+		stream, err := CreateStream(node, peerID, protocolID)
+		if err != nil {
+			log.Printf("[NETWORK] Error creating stream to %s: %v", peerID, err)
+			continue
+		}
+
+		if err := SendCommand(stream, "GET_VERSION"); err != nil {
+			log.Printf("[NETWORK] Error sending GET_VERSION to %s: %v", peerID, err)
+			stream.Close()
+			continue
+		}
+
+		// Receive version response
+		decoder := gob.NewDecoder(stream)
+		var versionData map[string]any
+		if err := decoder.Decode(&versionData); err != nil {
+			log.Printf("[NETWORK] Error decoding version from %s: %v", peerID, err)
+			stream.Close()
+			continue
+		}
+
+		height, ok1 := versionData["height"].(int)
+		lastHash, ok2 := versionData["lastHash"].([]byte)
+		nodeID, ok3 := versionData["nodeID"].(string)
+
+		if ok1 && ok2 && ok3 {
+			versions[peerID] = VersionInfo{
+				BestHeight: height,
+				LastHash:   lastHash,
+				NodeID:     nodeID,
+			}
+			log.Printf("[NETWORK] ✓ Peer %s version: height=%d, node=%s", peerID, height, nodeID)
+		}
+
+		stream.Close()
+	}
+
+	return versions
+}
+
+// HandleGetVersionRequest responds to version requests with local blockchain info
+func HandleGetVersionRequest(s network.Stream, chain *blockchain.BlockChain, nodeID string) {
+	defer s.Close()
+
+	height := chain.GetBestHeight()
+	lastHash := chain.LastHash
+
+	log.Printf("[NETWORK] Sending version info to %s (height: %d)", s.Conn().RemotePeer(), height)
+
+	encoder := gob.NewEncoder(s)
+	versionData := map[string]any{
+		"height":   height,
+		"lastHash": lastHash,
+		"nodeID":   nodeID,
+	}
+
+	if err := encoder.Encode(versionData); err != nil {
+		log.Printf("[NETWORK] Error sending version info: %v", err)
+	}
+}
+
+// SyncToLatestBlockchain syncs the local blockchain with the peer that has the longest chain
+func SyncToLatestBlockchain(node host.Host, chain *blockchain.BlockChain, nodeID string) error {
+	localHeight := chain.GetBestHeight()
+	versions := RequestVersionFromPeers(node, chain)
+
+	if len(versions) == 0 {
+		log.Printf("[NETWORK] No peers available for synchronization")
+		return fmt.Errorf("no peers available")
+	}
+
+	// Find peer with the longest chain
+	var bestPeerID peerstore.ID
+	var bestVersion VersionInfo
+	maxHeight := localHeight
+
+	for peerID, version := range versions {
+		if version.BestHeight > maxHeight {
+			maxHeight = version.BestHeight
+			bestPeerID = peerID
+			bestVersion = version
+		}
+	}
+
+	if maxHeight <= localHeight {
+		log.Printf("[NETWORK] ✓ Local blockchain is up to date (height: %d)", localHeight)
+		return nil
+	}
+
+	log.Printf("[NETWORK] Found peer %s with longer chain (height: %d vs local: %d)",
+		bestPeerID, bestVersion.BestHeight, localHeight)
+	log.Printf("[NETWORK] Starting synchronization from peer %s...", bestPeerID)
+
+	// Sync missing blocks from the best peer
+	if err := SyncMissingBlocks(node, bestPeerID, chain); err != nil {
+		return fmt.Errorf("failed to sync blockchain from peer %s: %w", bestPeerID, err)
+	}
+
+	log.Printf("[NETWORK] ✓ Successfully synchronized to height %d", bestVersion.BestHeight)
+	return nil
+}
+
+// SyncMissingBlocks requests and adds missing blocks from a peer to the existing blockchain
+func SyncMissingBlocks(node host.Host, peerID peerstore.ID, chain *blockchain.BlockChain) error {
+	localHeight := chain.GetBestHeight()
+	log.Printf("[NETWORK] Requesting blocks after height %d from peer: %s", localHeight, peerID)
+
+	// Create stream and send request
+	stream, err := CreateStream(node, peerID, protocolID)
+	if err != nil {
+		return err
+	}
+	defer stream.Close()
+
+	// Send command with local height
+	if err := SendCommand(stream, "GET_BLOCKS"); err != nil {
+		return err
+	}
+
+	// Send our current height so peer knows what to send
+	encoder := gob.NewEncoder(stream)
+	heightData := map[string]any{
+		"height": localHeight,
+	}
+	if err := encoder.Encode(heightData); err != nil {
+		return fmt.Errorf("failed to send height: %w", err)
+	}
+
+	// Receive only missing blocks
+	decoder := gob.NewDecoder(stream)
+	var newBlocksAdded int
+
+	for {
+		var blockData map[string]any
+		if err := decoder.Decode(&blockData); err != nil {
+			if strings.Contains(err.Error(), "EOF") {
+				break
+			}
+			return fmt.Errorf("failed to decode block: %w", err)
+		}
+
+		// Check for completion signal
+		if cmd, ok := blockData["command"].(string); ok && cmd == "done" {
+			break
+		}
+
+		// Extract block
+		serializedBlock, ok := blockData["data"].([]byte)
+		if !ok {
+			continue
+		}
+
+		block := blockchain.DeserializeBlock(serializedBlock)
+		if block == nil {
+			continue
+		}
+
+		// Add block to chain
+		if err := chain.AddBlock(block); err != nil {
+			log.Printf("[NETWORK] Error adding block %x (height: %d): %v", block.Hash, block.Height, err)
+			continue
+		}
+
+		newBlocksAdded++
+		log.Printf("[NETWORK] ✓ Added block %x (height: %d)", block.Hash, block.Height)
+	}
+
+	if newBlocksAdded > 0 {
+		log.Printf("[NETWORK] Successfully added %d new blocks", newBlocksAdded)
+	} else {
+		log.Printf("[NETWORK] No new blocks received (already synchronized)")
+	}
+
+	return nil
+}
+
+func HandleSendContractRequest(node host.Host, contract *blockchain.Contract) {
+	peers := node.Peerstore().Peers()
+	for _, peerID := range peers {
+		if peerID == node.ID() {
+			continue // Skip self
+		}
+
+		// Check if peer is actually connected
+		if node.Network().Connectedness(peerID) != network.Connected {
+			log.Printf("[NETWORK] Skipping disconnected peer %s", peerID)
+			continue
+		}
+
+		stream, err := CreateStream(node, peerID, protocolID)
+		if err != nil {
+			log.Printf("[NETWORK] Error creating stream to %s: %v", peerID, err)
+			continue
+		}
+		defer stream.Close()
+
+		encoder := gob.NewEncoder(stream)
+		if err := SendCommand(stream, "NEW_CONTRACT"); err != nil {
+			log.Printf("[NETWORK] Error sending command to %s: %v", peerID, err)
+			continue
+		}
+
+		contractData := map[string]any{
+			"contract": contract,
+		}
+
+		if err := encoder.Encode(contractData); err != nil {
+			log.Printf("[NETWORK] Error sending contract to %s: %v", peerID, err)
+		} else {
+			log.Printf("[NETWORK] Sent new contract to peer %s", peerID)
+		}
+	}
+}
+
+func HandleBroadcastBlockRequest(node host.Host, block *blockchain.Block) {
+	peers := node.Peerstore().Peers()
+
+	// Count only connected peers
+	connectedPeers := 0
+	for _, peerID := range peers {
+		if peerID != node.ID() && node.Network().Connectedness(peerID) == network.Connected {
+			connectedPeers++
+		}
+	}
+
+	log.Printf("[NETWORK] Broadcasting new block %x to %d connected peers", block.Hash, connectedPeers)
+
+	for _, peerID := range peers {
+		if peerID == node.ID() {
+			continue // Skip self
+		}
+
+		// Check if peer is actually connected
+		if node.Network().Connectedness(peerID) != network.Connected {
+			log.Printf("[NETWORK] Skipping disconnected peer %s", peerID)
+			continue
+		}
+
+		stream, err := CreateStream(node, peerID, protocolID)
+		if err != nil {
+			log.Printf("[NETWORK] Error creating stream to %s: %v", peerID, err)
+			continue
+		}
+		defer stream.Close()
+
+		if err := SendCommand(stream, "NEW_BLOCK"); err != nil {
+			log.Printf("[NETWORK] Error sending NEW_BLOCK command to %s: %v", peerID, err)
+			continue
+		}
+
+		encoder := gob.NewEncoder(stream)
+		blockData := map[string]any{
+			"data": block.SerializeBlock(),
+		}
+
+		if err := encoder.Encode(blockData); err != nil {
+			log.Printf("[NETWORK] Error broadcasting block to %s: %v", peerID, err)
+		} else {
+			log.Printf("[NETWORK] ✓ Broadcasted new block %x to peer %s", block.Hash, peerID)
+		}
+	}
+}
+
+func HandleReceiveContractRequest(s network.Stream, node host.Host, chain *blockchain.BlockChain) {
+	defer s.Close()
+
+	decoder := gob.NewDecoder(s)
+	var contractData map[string]any
+	if err := decoder.Decode(&contractData); err != nil {
+		log.Printf("[NETWORK] Error decoding contract data: %v", err)
+		return
+	}
+
+	contract, ok := contractData["contract"].(*blockchain.Contract)
+	if !ok {
+		log.Printf("[NETWORK] Invalid contract data received")
+		return
+	}
+	log.Printf("[NETWORK] Received new contract ID %x from peer %s", contract.ID, s.Conn().RemotePeer())
+
+	// Add contract to blockchain
+	cts := []*blockchain.Contract{contract}
+	block := chain.MineBlock(nil, cts)
+	log.Printf("[NETWORK] New contract ID %x included in block %x", contract.ID, block.Hash)
+
+	// Broadcast new block to all peers using dedicated function
+	HandleBroadcastBlockRequest(node, block)
+}
+
+func HandleReceiveNewBlockRequest(s network.Stream, chain *blockchain.BlockChain) {
+
+	decoder := gob.NewDecoder(s)
+	var blockData map[string]any
+	if err := decoder.Decode(&blockData); err != nil {
+		log.Printf("[NETWORK] Error decoding new block data: %v", err)
+		return
+	}
+
+	serializedBlock, ok := blockData["data"].([]byte)
+	if !ok {
+		log.Printf("[NETWORK] Invalid block data received")
+		return
+	}
+
+	block := blockchain.DeserializeBlock(serializedBlock)
+	if block == nil {
+		log.Printf("[NETWORK] Failed to deserialize received block")
+		return
+	}
+
+	// Add block to blockchain
+	if err := chain.AddBlock(block); err != nil {
+		log.Printf("[NETWORK] Error adding new block %x: %v", block.Hash, err)
+		return
+	}
+
+	log.Printf("[NETWORK] New block %x added to blockchain from peer %s", block.Hash, s.Conn().RemotePeer())
+
+	s.Close()
 }

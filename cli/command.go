@@ -21,7 +21,7 @@ func (cli *CommandLine) printUsage() {
 	fmt.Println(" getbalance -address <ADDRESS> : get the balance for an address")
 	fmt.Println(" createblockchain -address <ADDRESS> : creates a blockchain and sends genesis reward to address")
 	fmt.Println(" printchain : prints the blocks in the chain")
-	fmt.Println(" send -from <FROM> -to <TO> -amount <AMOUNT> -mine : send amount of coins from address to address")
+	fmt.Println(" send -from <FROM> -to <TO> -amount <AMOUNT> : send amount of coins from address to address")
 	fmt.Println(" createwallet : creates a new Wallet")
 	fmt.Println(" listaddresses : lists the addresses in our wallet file")
 	fmt.Println(" reindex : rebuilds the UTXO and ICCT sets")
@@ -147,7 +147,7 @@ func (cli *CommandLine) getBalance(address string, nodeID string) {
 	log.Printf("[CLI] Balance of %s retrieved: %d", address, balance)
 }
 
-func (cli *CommandLine) send(from, to string, amount int, nodeID string, mineNow bool) {
+func (cli *CommandLine) send(from, to string, amount int, nodeID string) {
 	/*
 		Creates and sends a new transaction from one address to another, including a coinbase transaction for the sender.
 		Updates the UTXO set after adding the new block to the blockchain.
@@ -178,17 +178,11 @@ func (cli *CommandLine) send(from, to string, amount int, nodeID string, mineNow
 
 	// Create a new transaction from the sender to the recipient
 	tx := blockchain.NewTransaction(&wallet, to, amount, &UTXOSet)
-	if mineNow {
-		log.Printf("[CLI] Mining transaction locally")
-		cbTx := blockchain.CoinbaseTx(from, "")    // Create a coinbase transaction for the sender
-		txs := []*blockchain.Transaction{cbTx, tx} // Include the coinbase transaction in the new block
-		newBlock := chain.MineBlock(txs, nil)      // Mine a new block with the transactions                   // Update the UTXO set with the new block
-		log.Printf("[CLI] ✓ Transaction mined in block %x", newBlock.Hash)
-	} else {
-		log.Printf("[CLI] Sending transaction to network")
-		network.SendTx(network.KnownNodes[0], tx) // Send the transaction to a known node in the network
-		log.Printf("[CLI] ✓ Transaction sent to network")
-	}
+	log.Printf("[CLI] Mining transaction locally")
+	cbTx := blockchain.CoinbaseTx(from, "")    // Create a coinbase transaction for the sender
+	txs := []*blockchain.Transaction{cbTx, tx} // Include the coinbase transaction in the new block
+	newBlock := chain.MineBlock(txs, nil)      // Mine a new block with the transactions                   // Update the UTXO set with the new block
+	log.Printf("[CLI] ✓ Transaction mined in block %x", newBlock.Hash)
 }
 
 func (cli *CommandLine) reindex(nodeID string) {
@@ -215,11 +209,5 @@ func (cli *CommandLine) startNode(nodeID string, minerAddress string) {
 		Starts a new node in the blockchain network.
 		If a miner address is provided, the node will also mine new blocks and send rewards to that address.
 	*/
-	// if len(minerAddress) > 0 {
-	// 	if !wallet.ValidateAddress(minerAddress) {
-	// 		log.Panic("[CLI] Invalid miner address provided")
-	// 	}
-	// }
-	// network.StartServer(nodeID, minerAddress)
-	network.RunMinerNode(nodeID, "", minerAddress)
+	network.RunMinerNode(nodeID, minerAddress)
 }

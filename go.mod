@@ -8,7 +8,6 @@ require (
 	github.com/libp2p/go-libp2p v0.44.0
 	github.com/mr-tron/base58 v1.2.0
 	github.com/multiformats/go-multiaddr v0.16.0
-	github.com/vrecan/death/v3 v3.0.3
 	google.golang.org/protobuf v1.36.6
 )
 
