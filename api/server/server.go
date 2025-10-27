@@ -257,8 +257,3 @@ func (s *Server) Close(ctx context.Context) error {
 
 	return nil
 }
-
-// GetChain returns the blockchain instance
-func (s *Server) GetChain() *blockchain.BlockChain {
-	return s.chain
-}

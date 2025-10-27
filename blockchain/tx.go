@@ -33,12 +33,6 @@ func NewTxOutput(value int, address string) *TxOutput {
 	return output
 }
 
-func (in *TxInput) UsesKey(pubKeyHash []byte) bool {
-	lockingHash := wallet.PublicKeyHash(in.PubKey)
-
-	return bytes.Equal(lockingHash, pubKeyHash)
-}
-
 func (out *TxOutput) Lock(address []byte) {
 	/*
 		Locks the output to a specific address by setting the PubKeyHash.

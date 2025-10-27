@@ -38,11 +38,6 @@ func (pdb *PebbleDB) Close() error {
 	return pdb.db.Close()
 }
 
-// Set sets a key-value pair in the PebbleDB.
-func (pdb *PebbleDB) Set(key, value []byte) error {
-	return pdb.db.Set(key, value, pebble.Sync)
-}
-
 // Get retrieves the value for a given key from the PebbleDB.
 func (pdb *PebbleDB) Get(key []byte) ([]byte, error) {
 	value, closer, err := pdb.db.Get(key)
@@ -55,19 +50,9 @@ func (pdb *PebbleDB) Get(key []byte) ([]byte, error) {
 	return value, nil
 }
 
-// Delete removes a key-value pair from the PebbleDB.
-func (pdb *PebbleDB) Delete(key []byte) error {
-	return pdb.db.Delete(key, pebble.Sync)
-}
-
 // Batch creates a new batch for batch operations.
 func (pdb *PebbleDB) Batch() *pebble.Batch {
 	return pdb.db.NewBatch()
-}
-
-// ApplyBatch applies a batch of operations to the PebbleDB.
-func (pdb *PebbleDB) ApplyBatch(batch *pebble.Batch) error {
-	return pdb.db.Apply(batch, &pebble.WriteOptions{Sync: true})
 }
 
 func (pdb *PebbleDB) GetRawDB() *pebble.DB {
