@@ -78,11 +78,13 @@ func ReceiveBlocks(decoder *gob.Decoder, processBlock func([]byte, *blockchain.B
 		// Extract block
 		serializedBlock, ok := blockData["data"].([]byte)
 		if !ok {
+			log.Printf("[NETWORK] Invalid block data format, skipping")
 			continue
 		}
 
 		block := blockchain.DeserializeBlock(serializedBlock)
 		if block == nil {
+			log.Printf("[NETWORK] Failed to deserialize block, skipping")
 			continue
 		}
 
@@ -91,13 +93,17 @@ func ReceiveBlocks(decoder *gob.Decoder, processBlock func([]byte, *blockchain.B
 			return blockCount, lastHash, maxHeight, err
 		}
 
-		// Track highest block
-		if block.Height > maxHeight {
+		// Track the latest block (since blocks are sent in chronological order)
+		if block.Height >= maxHeight {
 			maxHeight = block.Height
 			lastHash = block.Hash
 		}
 
 		blockCount++
+
+		if blockCount == 1 {
+			log.Printf("[NETWORK] Received genesis block (height: %d)", block.Height)
+		}
 	}
 
 	return blockCount, lastHash, maxHeight, nil
@@ -383,7 +389,6 @@ func SyncMissingBlocks(node host.Host, peerID peerstore.ID, chain *blockchain.Bl
 
 	return nil
 }
-
 
 func BroadcastBlock(node host.Host, block *blockchain.Block) {
 	peers := node.Peerstore().Peers()

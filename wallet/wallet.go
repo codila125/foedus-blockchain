@@ -1,13 +1,10 @@
 package wallet
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
+	"log"
 	"crypto/rand"
 	"crypto/sha256"
-	"fmt"
-	"log"
-	"math/big"
+	"crypto/ed25519"
 )
 
 const (
@@ -16,8 +13,8 @@ const (
 )
 
 type Wallet struct {
-	PrivateKey []byte // Private key in bytes
-	PublicKey  []byte // Public key in bytes
+	PublicKey   ed25519.PublicKey   // Public key in bytes
+	PrivateKey  ed25519.PrivateKey // Private key in bytes
 }
 
 func (w Wallet) Address() []byte {
@@ -50,28 +47,26 @@ func ValidateAddress(address string) bool {
 	return string(actualChecksum) == string(targetChecksum) // Compare the extracted checksum with the recomputed checksum
 }
 
-func NewKeyPair() (ecdsa.PrivateKey, []byte) {
+func NewKeyPair() (ed25519.PublicKey, ed25519.PrivateKey) {
 	/*
 		Generates a new ECDSA private and public key pair using the P256 curve.
 		Returns the private key and the public key as a byte slice.
 	*/
-	curve := elliptic.P256() // Using P256 curve for key generation
 
-	private, err := ecdsa.GenerateKey(curve, rand.Reader) // Generate a new private key
+	public, private, err := ed25519.GenerateKey(rand.Reader) // Generate a new private key
 	if err != nil {
 		log.Panic(err)
 	}
 
-	pub := append(private.X.Bytes(), private.Y.Bytes()...) // Concatenate X and Y coordinates of the private key to form the public key
-	return *private, pub
+	return public, private
 }
 
 func MakeWallet() *Wallet {
 	/*
 		Creates a new wallet using a newly generated key pair.
 	*/
-	private, public := NewKeyPair()
-	wallet := Wallet{private.D.Bytes(), public}
+	public, private := NewKeyPair()
+	wallet := Wallet{PublicKey: public, PrivateKey: private}
 
 	return &wallet
 }
@@ -93,38 +88,4 @@ func Checksum(payload []byte) []byte {
 	secondHash := sha256.Sum256(firstHash[:])
 
 	return secondHash[:checksumLength]
-}
-
-func (w *Wallet) ReconstructECDSAKey() (*ecdsa.PrivateKey, error) {
-	/*
-		Reconstructs the ECDSA private key from the wallet's private key bytes.
-		Returns the reconstructed private key.
-	*/
-	curve := elliptic.P256() // Assuming P256 is always used for this blockchain
-
-	d := new(big.Int).SetBytes(w.PrivateKey) // Set D from the private key bytes
-
-	// Reconstruct X and Y from PublicKey
-	pubKeyLen := len(w.PublicKey)
-	if pubKeyLen%2 != 0 {
-		return nil, fmt.Errorf("invalid public key length for reconstruction")
-	}
-
-	x := new(big.Int).SetBytes(w.PublicKey[:pubKeyLen/2]) // X is the first half of the public key bytes
-	y := new(big.Int).SetBytes(w.PublicKey[pubKeyLen/2:]) // Y is the second half of the public key bytes
-
-	// Reconstruct the public key
-	publicKey := ecdsa.PublicKey{
-		Curve: curve,
-		X:     x,
-		Y:     y,
-	}
-
-	// Reconstruct the private key
-	privateKey := &ecdsa.PrivateKey{
-		PublicKey: publicKey,
-		D:         d,
-	}
-
-	return privateKey, nil
 }

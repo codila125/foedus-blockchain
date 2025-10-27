@@ -2,14 +2,12 @@ package blockchain
 
 import (
 	"bytes"
-	"crypto/ecdsa"
-	"crypto/elliptic"
+	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
-	"math/big"
 	"slices"
 	"strings"
 	"time"
@@ -103,7 +101,7 @@ func (blockchain *BlockChain) FindContract(contractID string) (Contract, error) 
 	return Contract{}, errors.New("Contract not found")
 }
 
-func (contract *Contract) SignContract(privKey *ecdsa.PrivateKey, partyAddress []byte) error {
+func (contract *Contract) SignContract(privKey *ed25519.PrivateKey, partyAddress []byte) error {
 	/*
 	   Signs a contract using the provided private key.
 	   A party signs to indicate they agree to the contract terms.
@@ -126,13 +124,7 @@ func (contract *Contract) SignContract(privKey *ecdsa.PrivateKey, partyAddress [
 	contractHash := ctCopy.HashContract()
 
 	// Sign the contract hash
-	r, s, err := ecdsa.Sign(rand.Reader, privKey, contractHash)
-	if err != nil {
-		return fmt.Errorf("failed to sign contract: %w", err)
-	}
-
-	// Encode signature as r||s (64 bytes total: 32 bytes r + 32 bytes s)
-	signature := append(r.Bytes(), s.Bytes()...)
+	signature := ed25519.Sign(*privKey, contractHash)
 
 	// Find and update the party's signature
 	for i := range contract.Parties {
@@ -216,24 +208,6 @@ func (contract *Contract) VerifyContractSignature(partyAddress []byte, pubKeyByt
 		return false
 	}
 
-	// Reconstruct the ECDSA public key from bytes
-	// Public key format: X coordinate || Y coordinate (64 bytes total for P256)
-	curve := elliptic.P256()
-	keyLen := len(pubKeyBytes)
-
-	if keyLen != 64 {
-		log.Printf("[CONTRACT] ✗ Invalid public key length: %d (expected 64)", keyLen)
-		return false
-	}
-
-	x := new(big.Int).SetBytes(pubKeyBytes[:32])
-	y := new(big.Int).SetBytes(pubKeyBytes[32:])
-
-	pubKey := &ecdsa.PublicKey{
-		Curve: curve,
-		X:     x,
-		Y:     y,
-	}
 	// Create contract copy without signatures for hashing
 	ctCopy := *contract
 	// Deep copy the parties slice to avoid modifying the original
@@ -253,13 +227,9 @@ func (contract *Contract) VerifyContractSignature(partyAddress []byte, pubKeyByt
 		return false
 	}
 
-	r := new(big.Int).SetBytes(partySignature[:32])
-	s := new(big.Int).SetBytes(partySignature[32:])
+	pubKey := ed25519.PublicKey(pubKeyBytes)
 
-	// Verify signature
-	isValid := ecdsa.Verify(pubKey, contractHash, r, s)
-
-	return isValid
+	return ed25519.Verify(pubKey, contractHash, partySignature)
 }
 
 func (contract *Contract) AreAllPartiesSigned() bool {
@@ -301,7 +271,7 @@ func CreateContract(title, description string, w *wallet.Wallet, milestones []*M
 	creatorParty := &Party{
 		Address:   creatorAddress,
 		Role:      RoleCreator,
-		PublicKey: w.PublicKey,
+		PublicKey: []byte(w.PublicKey),
 		Signature: []byte{},
 	}
 
@@ -374,9 +344,7 @@ func (contract *Contract) ApproveContract(wallet *wallet.Wallet) error {
 		contract.UpdatedAt = time.Now().Unix()
 	}
 
-	privatekey, err := wallet.ReconstructECDSAKey() // Reconstruct the ECDSA private key from the wallet
-	Handle(err)
-	err = contract.SignContract(privatekey, wallet.Address())
+	err := contract.SignContract(&wallet.PrivateKey, wallet.Address())
 	if err != nil {
 		log.Printf("[CONTRACT] Failed to approve contract: %x by: %x", contract.ID, wallet.Address())
 		return fmt.Errorf("[CONTRACT] Failed to approve contract: %x by: %x", contract.ID, wallet.Address())

@@ -2,14 +2,12 @@ package blockchain
 
 import (
 	"bytes"
-	"crypto/ecdsa"
-	"crypto/elliptic"
+	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
-	"math/big"
 	"strings"
 
 	"github.com/codila125/foedus-blockchain/wallet"
@@ -77,11 +75,11 @@ func (blockchain *BlockChain) FindTransaction(ID []byte) (Transaction, error) {
 	return Transaction{}, errors.New("Transaction does not exist")
 }
 
-func (blockchain *BlockChain) SignTransaction(tx *Transaction, privKey ecdsa.PrivateKey) {
+func (blockchain *BlockChain) SignTransaction(tx *Transaction, privKey ed25519.PrivateKey) {
 	/*
 		Signs a transaction using the provided private key.
 		'tx' is the transaction to be signed.
-		'privKey' is the ECDSA private key used for signing.
+		'privKey' is the Ed25519 private key used for signing.
 	*/
 	if tx.IsCoinbaseTx() {
 		return
@@ -169,15 +167,14 @@ func NewTransaction(w *wallet.Wallet, to string, amount int, UTXO *UTXOSet) *Tra
 
 	tx := Transaction{nil, inputs, outputs}    // Create the transaction with inputs and outputs
 	tx.ID = tx.HashTransaction()               // Sign the transaction to prove ownership of the inputs
-	privatekey, err := w.ReconstructECDSAKey() // Reconstruct the ECDSA private key from the wallet
-	Handle(err)
-	UTXO.Blockchain.SignTransaction(&tx, *privatekey)
+
+	UTXO.Blockchain.SignTransaction(&tx, w.PrivateKey)
 
 	log.Printf("[TRANSACTION] Transaction created - ID: %x, Amount: %d", tx.ID, amount)
 	return &tx
 }
 
-func (tx *Transaction) Sign(privKey ecdsa.PrivateKey, prevTXs map[string]Transaction) {
+func (tx *Transaction) Sign(privKey ed25519.PrivateKey, prevTXs map[string]Transaction) {
 	if tx.IsCoinbaseTx() {
 		return
 	}
@@ -197,10 +194,7 @@ func (tx *Transaction) Sign(privKey ecdsa.PrivateKey, prevTXs map[string]Transac
 
 		dataToSign := fmt.Sprintf("%x\n", txCopy)
 
-		r, s, err := ecdsa.Sign(rand.Reader, &privKey, []byte(dataToSign))
-		Handle(err)
-		signature := append(r.Bytes(), s.Bytes()...)
-
+		signature := ed25519.Sign(privKey, []byte(dataToSign))
 		tx.Inputs[inID].Signature = signature
 		txCopy.Inputs[inID].PubKey = nil
 	}
@@ -238,30 +232,16 @@ func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
 	}
 
 	txCopy := tx.TrimmedCopy()
-	curve := elliptic.P256()
 
 	for inID, in := range tx.Inputs {
 		prevTx := prevTXs[hex.EncodeToString(in.ID)]
 		txCopy.Inputs[inID].Signature = nil
 		txCopy.Inputs[inID].PubKey = prevTx.Outputs[in.Out].PubKeyHash
 
-		r := big.Int{}
-		s := big.Int{}
-
-		sigLen := len(in.Signature)
-		r.SetBytes(in.Signature[:(sigLen / 2)])
-		s.SetBytes(in.Signature[(sigLen / 2):])
-
-		x := big.Int{}
-		y := big.Int{}
-		keyLen := len(in.PubKey)
-		x.SetBytes(in.PubKey[:(keyLen / 2)])
-		y.SetBytes(in.PubKey[(keyLen / 2):])
-
 		dataToVerify := fmt.Sprintf("%x\n", txCopy)
 
-		rawPubKey := ecdsa.PublicKey{Curve: curve, X: &x, Y: &y}
-		if !ecdsa.Verify(&rawPubKey, []byte(dataToVerify), &r, &s) {
+		pubKey := ed25519.PublicKey(in.PubKey)
+		if !ed25519.Verify(pubKey, []byte(dataToVerify), in.Signature) {
 			return false
 		}
 		txCopy.Inputs[inID].PubKey = nil

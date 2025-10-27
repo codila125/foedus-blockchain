@@ -45,6 +45,11 @@ func HandleGetBlockchainRequest(s network.Stream, chain *blockchain.BlockChain) 
 	blockHashes := chain.GetBlockHashes()
 	log.Printf("[NETWORK] Sending %d blocks to peer %s", len(blockHashes), s.Conn().RemotePeer())
 
+	// Reverse block hashes to send in chronological order (genesis first)
+	for i, j := 0, len(blockHashes)-1; i < j; i, j = i+1, j-1 {
+		blockHashes[i], blockHashes[j] = blockHashes[j], blockHashes[i]
+	}
+
 	encoder := gob.NewEncoder(s)
 
 	// Use modular SendBlocks function

@@ -8,7 +8,7 @@ import (
 	"math/big"
 )
 
-const Difficulty = 2 // Difficulty is the number of leading zero bits required in the hash
+const difficulty = 12 // Difficulty is the number of leading zero bits required in the hash
 
 type ProofOfWork struct {
 	Block  *Block   // The block to be mined
@@ -20,7 +20,7 @@ func NewProof(b *Block) *ProofOfWork {
 		Creates a new Proof of Work instance for the given block.
 	*/
 	target := big.NewInt(1)                  // Initialize target to 1
-	target.Lsh(target, uint(256-Difficulty)) // Left shift the target to set the difficulty
+	target.Lsh(target, uint(256-difficulty)) // Left shift the target to set the difficulty
 
 	pow := &ProofOfWork{b, target}
 
@@ -41,7 +41,7 @@ func (pow *ProofOfWork) InitData(nonce int) []byte {
 	buffer = append(buffer, nonceBytes...)
 
 	difficultyBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(difficultyBytes, uint64(Difficulty))
+	binary.BigEndian.PutUint64(difficultyBytes, uint64(difficulty))
 	buffer = append(buffer, difficultyBytes...)
 
 	return buffer
