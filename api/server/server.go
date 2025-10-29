@@ -108,7 +108,6 @@ func (s *Server) GetBalance(ctx context.Context, address string) (int, error) {
 // the contract with the provided parties, milestones, and terms, and then
 // broadcasts it to the network for other nodes to process.
 func (s *Server) CreateContract(ctx context.Context, req CreateContractReq) (string, error) {
-
 	wallets, err := wallet.CreateWallets(s.port)
 	if err != nil {
 		return "", err

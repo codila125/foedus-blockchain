@@ -203,7 +203,6 @@ func (blockchain *BlockChain) MineBlock(transactions []*Transaction, contracts [
 // extends the longest chain, updates the blockchain's tip. The UTXO and ICCT sets
 // are also updated accordingly.
 func (blockchain *BlockChain) AddBlock(block *Block) error {
-
 	db := blockchain.Database.GetRawDB()
 	batch := db.NewBatch()
 	defer func() {

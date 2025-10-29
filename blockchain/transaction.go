@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"strings"
 
 	"github.com/codila125/foedus-blockchain/wallet"
 )
@@ -243,40 +242,4 @@ func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
 	}
 
 	return true
-}
-
-// String provides a human-readable, formatted string representation of the
-// transaction. It details the transaction ID, its inputs, and its outputs,
-// making it easier to inspect and debug.
-func (tx Transaction) String() string {
-	var b strings.Builder
-
-	b.WriteString(fmt.Sprintf("╭─── TRANSACTION [%.16x...] ───╮\n", tx.ID))
-
-	// Inputs
-	b.WriteString(fmt.Sprintf("├─ INPUTS (%d)\n", len(tx.Inputs)))
-	if len(tx.Inputs) == 0 {
-		b.WriteString("│   (No Inputs)\n")
-	}
-	for i, input := range tx.Inputs {
-		if tx.IsCoinbaseTx() {
-			b.WriteString(fmt.Sprintf("│   [COINBASE] → Reward Data: %s\n", input.PubKey))
-		} else {
-			b.WriteString(fmt.Sprintf("│   [%d] From TX: %.16x...\n", i, input.ID))
-			b.WriteString(fmt.Sprintf("│       Output Index: %d\n", input.Out))
-		}
-	}
-
-	// Outputs
-	b.WriteString(fmt.Sprintf("├─ OUTPUTS (%d)\n", len(tx.Outputs)))
-	if len(tx.Outputs) == 0 {
-		b.WriteString("│   (No Outputs)\n")
-	}
-	for i, output := range tx.Outputs {
-		b.WriteString(fmt.Sprintf("│   [%d] To PubKeyHash: %.16x...\n", i, output.PubKeyHash))
-		b.WriteString(fmt.Sprintf("│       Value: %d\n", output.Value))
-	}
-
-	b.WriteString("╰" + strings.Repeat("─", 50) + "╯")
-	return b.String()
 }

@@ -29,7 +29,6 @@ func (outs TxOutputs) SerializeOutputs() []byte {
 // This is the counterpart to SerializeOutputs and is used to read outputs from the
 // database or network streams.
 func DeserializeOutputs(data []byte) TxOutputs {
-
 	protobufOutputs := &protobuf.TxOutputs{}
 
 	if err := proto.Unmarshal(data, protobufOutputs); err != nil {

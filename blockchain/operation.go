@@ -57,7 +57,6 @@ func (contract *Contract) IsCoinbaseOp() bool {
 // search by first checking the Incomplete Contract (ICCT) set for active contracts.
 // If not found, it performs a full scan of the blockchain history.
 func (blockchain *BlockChain) FindContract(contractID string) (Contract, error) {
-
 	targetID, err := hex.DecodeString(contractID)
 	if err != nil {
 		targetID = []byte(contractID)
@@ -417,37 +416,4 @@ func (contract *Contract) AllMilestonesCompleted() bool {
 		}
 	}
 	return true
-}
-
-// String returns a string representation of the contract with formatted output.
-func (contract Contract) String() string {
-	var b strings.Builder
-	b.WriteString(fmt.Sprintf("╭─── CONTRACT [%.16x...] ───╮\n", contract.ID))
-	b.WriteString(fmt.Sprintf("│ Title: %s\n", contract.Title))
-	b.WriteString(fmt.Sprintf("│ Status: %s\n", contract.Status))
-	b.WriteString(fmt.Sprintf("│ Creator: %s\n", contract.CreatorAddress))
-
-	b.WriteString(fmt.Sprintf("├─ PARTIES (%d)\n", len(contract.Parties)))
-	if len(contract.Parties) == 0 {
-		b.WriteString("│   (No Parties)\n")
-	}
-	for _, party := range contract.Parties {
-		signed := "📝" // Signed
-		if len(party.Signature) == 0 {
-			signed = "⏳" // Pending
-		}
-		b.WriteString(fmt.Sprintf("│   %s [%s] %s\n", signed, party.Role, party.Address))
-	}
-
-	b.WriteString(fmt.Sprintf("├─ MILESTONES (%d)\n", len(contract.Milestones)))
-	if len(contract.Milestones) == 0 {
-		b.WriteString("│   (No Milestones)\n")
-	}
-	for i, milestone := range contract.Milestones {
-		b.WriteString(fmt.Sprintf("│   [%d] %s (%s)\n", i+1, milestone.Title, milestone.Status))
-		b.WriteString(fmt.Sprintf("│       Value: %d\n", milestone.Value))
-	}
-
-	b.WriteString("╰" + strings.Repeat("─", 50) + "╯")
-	return b.String()
 }
