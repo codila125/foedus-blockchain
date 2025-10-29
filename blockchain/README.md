@@ -1,318 +1,212 @@
-# ⛓️ Blockchain Module
+# Blockchain Module
 
-> The core engine of Foedus - implementing Proof-of-Work consensus, UTXO transactions, and milestone-based smart contracts.
+Core blockchain implementation with Proof-of-Work consensus, UTXO transaction model, and milestone-based smart contracts.
 
-This module is the heart of the blockchain, combining Bitcoin-inspired UTXO model with modern smart contract capabilities for real-world project delivery and payments.
+## Overview
 
----
+The blockchain module provides the foundational data structures and algorithms for the Foedus blockchain. It combines Bitcoin's UTXO model for value transfer with custom smart contracts supporting milestone-based project agreements.
 
-## ✨ Features
-
-- ⛏️ **Proof-of-Work Mining** - SHA-256 based consensus with adjustable difficulty
-- 💰 **UTXO Model** - Bitcoin-style unspent transaction outputs
-- 📜 **Smart Contracts** - Milestone-based payments for projects
-- 🔗 **Chain Validation** - Cryptographic integrity verification
-- 🗄️ **PebbleDB Storage** - High-performance persistent storage
-- 🌳 **Merkle Trees** - Efficient transaction verification
-- 🔐 **Digital Signatures** - Secure transaction authorization
-
-## 🏗️ Architecture
-
-### Core Components
-
-- **`blockchain.go`** - Blockchain structure and chain management
-- **`block.go`** - Block structure and creation
-- **`transaction.go`** - Transaction logic and UTXO handling
-- **`proof.go`** - Proof-of-Work mining algorithm
-- **`contract.go`** - Smart contract and milestone structures
-- **`utxo.go`** - UTXO set management
-- **`iterator.go`** - Blockchain traversal
-- **`serialize.go`** - Data serialization/deserialization
-
-### Key Structures
-
-```go
-type BlockChain struct {
-    LastHash []byte           // Hash of the last block
-    Database *database.PebbleDB  // Persistent storage
-}
-
-type Block struct {
-    Hash         []byte
-    Transactions []*Transaction
-    PrevHash     []byte
-    Nonce        int
-    Height       int
-}
-
-type Transaction struct {
-    ID      []byte
-    Inputs  []TxInput
-    Outputs []TxOutput
-}
-```
-
-## 🚀 Usage
-
-### CLI Commands
-
-#### Create a Blockchain
-```bash
-# Initialize a new blockchain with genesis block
-# Sends initial reward to specified address
-export NODE_ID=3000
-./blockchain createblockchain -address YOUR_ADDRESS
-
-# Example output:
-# [BLOCKCHAIN] Initializing new blockchain for node 3000
-# [BLOCKCHAIN] Genesis block created - Hash: 00001a2b3c...
-```
-
-#### Send Transactions
-```bash
-# Send coins from one address to another
-./blockchain send -from SENDER_ADDR -to RECEIVER_ADDR -amount 50
-
-# Mine transaction immediately
-./blockchain send -from SENDER_ADDR -to RECEIVER_ADDR -amount 50 -mine
-
-# Example output:
-# [TRANSACTION] New transaction created: 3d4e5f6g...
-# Success! Transaction included in block
-```
-
-#### Check Balance
-```bash
-# Get balance for a wallet address
-./blockchain getbalance -address YOUR_ADDRESS
-
-# Example output:
-# Balance of YOUR_ADDRESS: 100
-```
-
-#### Display Blockchain
-```bash
-# Print all blocks in the chain
-./blockchain printchain
-
-# Example output:
-# Block Hash: 00001a2b3c...
-# Previous Hash: 0000000000...
-# Height: 0
-# Transactions: 1
-# PoW: true
-# -------------------
-```
-
-#### Reindex UTXO Set
-```bash
-# Rebuild the UTXO set from the blockchain
-./blockchain reindex
-
-# Use when UTXO set becomes corrupted or outdated
-```
-
-### REST API Endpoints
-
-#### Get Blockchain
-```bash
-# Retrieve all blocks in the chain
-curl http://localhost:3000/blockchain/printchain
-
-# Response: Array of blocks with full details
-```
-
-#### Check Balance
-```bash
-# Get balance for a specific address
-curl http://localhost:3000/blockchain/getbalance/YOUR_ADDRESS
-
-# Response:
-# {
-#   "balance": 100
-# }
-```
-
-#### Create Contract
-```bash
-# Create a new smart contract with milestones
-curl -X POST http://localhost:3000/blockchain/createcontract/CREATOR_ADDRESS \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "Website Development",
-    "description": "Build e-commerce site",
-    "milestones": [
-      {
-        "title": "Design Phase",
-        "description": "Complete UI/UX design",
-        "value": 1000,
-        "dueDate": 1735689600
-      }
-    ],
-    "parties": [
-      {
-        "address": "CONTRACTOR_ADDRESS",
-        "role": "CONTRACTOR"
-      }
-    ]
-  }'
-
-# Response:
-# {
-#   "contractID": "a1b2c3d4...",
-#   "status": "success"
-# }
-```
-
-#### Approve Contract
-```bash
-# Party approves and signs the contract
-curl http://localhost:3000/blockchain/approvecontract/PARTY_ADDRESS/CONTRACT_ID
-
-# Response:
-# {
-#   "status": "Contract approved and signed"
-# }
-```
-
-#### Get Contract
-```bash
-# Retrieve contract details
-curl http://localhost:3000/blockchain/getcontract/CONTRACT_ID
-
-# Response: Full contract with all milestones and parties
-```
-
-#### Approve Milestone
-```bash
-# Approve a milestone completion
-curl -X POST http://localhost:3000/blockchain/approvemilestone/CONTRACT_ID/MILESTONE_ID/APPROVER_ADDRESS
-
-# Response:
-# {
-#   "status": "Milestone approved"
-# }
-```
-
-## 🎯 Proof-of-Work
-
-Foedus uses SHA-256-based Proof-of-Work with adjustable difficulty:
-
-```go
-const Difficulty = 12  // Number of leading zeros required
-```
-
-**Mining Process:**
-1. Collect pending transactions
-2. Build a new block
-3. Find nonce that produces hash with required leading zeros
-4. Broadcast new block to network
-
-## 💰 UTXO Model
-
-**Unspent Transaction Output** model ensures:
-- No double-spending
-- Efficient balance calculation
-- Transaction privacy
-- Simplified verification
-
-**Transaction Flow:**
-1. Select unspent outputs (inputs)
-2. Create new outputs (recipients)
-3. Sign with private key
-4. Broadcast to network
-5. Update UTXO set after mining
-
-## 📜 Smart Contracts
-
-Foedus implements milestone-based contracts for:
-- Freelance work
-- Project delivery
-- Escrow services
-- Multi-party agreements
-
-**Contract Lifecycle:**
-1. **DRAFT** - Created, awaiting signatures
-2. **ACTIVE** - All parties signed, milestones in progress
-3. **COMPLETED** - All milestones completed
-4. **CANCELLED** - Contract terminated
-
-**Milestone Statuses:**
-- **ACTIVE** - In progress
-- **COMPLETED** - Finished and approved
-- **CANCELLED** - Milestone cancelled
-
-## 📁 File Structure
+## Architecture
 
 ```
 blockchain/
-├── blockchain.go    # Chain management and persistence
-├── block.go         # Block structure and creation
-├── transaction.go   # Transaction logic
-├── proof.go         # Proof-of-Work algorithm
-├── contract.go      # Smart contract structures
-├── utxo.go          # UTXO set management
-├── tx.go            # Transaction helpers
-├── iterator.go      # Chain traversal
-├── serialize.go     # Serialization utilities
-├── hash.go          # Hashing functions
-├── operation.go     # Contract operations
-└── README.md        # This file
+├── blockchain.go     # Chain management, mining, validation
+├── block.go          # Block structure and creation
+├── transaction.go    # Transaction creation, signing, verification
+├── contract.go       # Smart contract structures and statuses
+├── operation.go      # Contract operations and lifecycle
+├── proof.go          # Proof-of-Work mining algorithm
+├── utxo.go           # UTXO set management and indexing
+├── icct.go           # Incomplete Contract Tracking (ICCT) set
+├── tx.go             # Transaction inputs/outputs
+├── hash.go           # Hashing utilities (Merkle roots)
+├── iterator.go       # Blockchain traversal
+└── serialize.go      # Binary serialization
 ```
 
-## 🔐 Security Features
+**Core Data Structures:**
 
-- **Cryptographic signing** of all transactions
-- **Merkle tree** for transaction integrity
-- **Proof-of-Work** prevents chain manipulation
-- **UTXO validation** prevents double-spending
-- **Address validation** before transactions
-
-## 💡 Common Operations
-
-### Mine a Block
 ```go
-block := Block{
-    Hash:         []byte{},
-    Transactions: txs,
-    PrevHash:     prevHash,
+type BlockChain struct {
+    LastHash []byte             // Most recent block hash
+    Database *database.PebbleDB // Persistent storage (PebbleDB)
 }
-pow := NewProofOfWork(&block)
-nonce, hash := pow.Run()  // Mining happens here
-```
 
-### Validate Chain
-```go
-iter := chain.Iterator()
-for {
-    block := iter.Next()
-    pow := NewProofOfWork(block)
-    if !pow.Validate() {
-        return false
-    }
+type Block struct {
+    Hash         []byte         // Block hash (PoW result)
+    Transactions []*Transaction // UTXO transactions
+    Contracts    []*Contract    // Smart contracts
+    PrevHash     []byte         // Previous block hash
+    Nonce        int            // PoW nonce
+    Height       int            // Block number
+    Timestamp    int64          // Creation time
+}
+
+type Transaction struct {
+    ID      []byte      // Transaction hash
+    Inputs  []TxInput   // References to UTXOs
+    Outputs []TxOutput  // New UTXOs
 }
 ```
 
-## ⚙️ Configuration
+## Key Features
 
-- **Difficulty**: Adjustable in `proof.go` (default: 12)
-- **Database Path**: `temp/blocks_<NODE_ID>`
-- **Genesis Reward**: Configurable in `transaction.go`
+**Proof-of-Work Consensus:**
+- SHA-256 hashing with adjustable difficulty (default: 12)
+- Nonce-based mining algorithm
+- Block validation with PoW verification
 
-## 🔗 Dependencies
+**UTXO Transaction Model:**
+- Bitcoin-style unspent transaction outputs
+- Cryptographic signature verification (Ed25519)
+- Double-spending prevention through UTXO tracking
+- Efficient balance calculation
 
-- `github.com/cockroachdb/pebble` - Database storage
-- `crypto/sha256` - Hashing algorithm
-- `encoding/gob` - Data serialization
+**Smart Contracts:**
+- Milestone-based project agreements
+- Multi-party signature support
+- Contract lifecycle management (DRAFT → ACTIVE → COMPLETED)
+- Evidence-based milestone approval
 
-## 📚 Related Modules
+**State Management:**
+- UTXO Set: Indexed unspent outputs for fast lookups
+- ICCT Set: Incomplete Contract Tracking for active contracts
+- Merkle tree-based transaction/contract integrity
 
-- **Wallet** - Transaction signing and address generation
+## Core Operations
+
+### Blockchain Initialization
+
+```go
+// Create new blockchain with genesis block
+chain := NewBlockChain(address, nodeID)
+
+// Continue existing blockchain
+chain := ContinueBlockChain(nodeID)
+```
+
+### Transaction Processing
+
+```go
+// Create transaction
+tx := NewTransaction(wallet, toAddress, amount, utxoSet)
+
+// Sign transaction
+chain.SignTransaction(tx, privateKey)
+
+// Verify transaction
+valid := chain.VerifyTransaction(tx, txMap)
+```
+
+### Block Mining
+
+```go
+// Mine new block with transactions and contracts
+block := chain.MineBlock(transactions, contracts)
+
+// Proof-of-Work
+pow := NewProof(block)
+nonce, hash := pow.Run()
+
+// Validate block
+valid := pow.Validate()
+```
+
+### Smart Contract Operations
+
+```go
+// Create contract
+contract := CreateContract(title, description, wallet, milestones, parties, terms, attachments)
+
+// Approve contract
+err := contract.ApproveContract(wallet)
+
+// Approve milestone
+updatedContract, err := contract.ApproveMilestone(wallet, milestoneID, evidence)
+
+// Find contract
+contract, err := chain.FindContract(contractID)
+```
+
+### UTXO Management
+
+```go
+// Initialize UTXO set
+utxoSet := UTXOSet{Blockchain: chain}
+
+// Reindex from blockchain
+utxoSet.Reindex()
+
+// Find spendable outputs
+acc, outputs := utxoSet.FindSpendableOutputs(pubKeyHash, amount)
+
+// Update after mining
+utxoSet.Update(block)
+```
+
+## Contract Lifecycle
+
+**Statuses:**
+- `DRAFT` - Created, awaiting party signatures
+- `ACTIVE` - All parties signed, milestones in progress
+- `COMPLETED` - All milestones fulfilled
+- `CANCELLED` - Terminated prematurely
+
+**Milestone Statuses:**
+- `ACTIVE` - In progress
+- `COMPLETED` - Delivered and approved
+- `CANCELLED` - Voided
+
+**Workflow:**
+1. Creator initiates contract with milestones and parties
+2. Parties review and sign contract (DRAFT → ACTIVE)
+3. Contractor delivers milestone with evidence
+4. Parties approve milestone completion
+5. Payment released upon approval
+6. Contract completes when all milestones done
+
+## Validation Rules
+
+**Transaction Validation:**
+- All inputs reference valid UTXOs
+- Input signatures verified with Ed25519 public keys
+- Sum of inputs ≥ sum of outputs
+- No double-spending within block
+
+**Contract Validation:**
+- All party addresses valid
+- Creator signature present
+- Milestone values > 0
+- Contract ID matches hash
+
+**Block Validation:**
+- Previous block hash exists
+- PoW hash meets difficulty target
+- All transactions valid
+- All contracts valid
+- Merkle roots match computed values
+
+## Storage Structure
+
+```
+temp/blocks_{NODE_ID}/
+├── 000001.sst     # Sorted string tables
+├── MANIFEST       # Database manifest
+└── OPTIONS        # PebbleDB configuration
+```
+
+**Key Prefixes**: Block data (hash), UTXO (`utxo-{txID}`), ICCT (`icct-{contractID}`), Last hash (`lh`)
+
+## Dependencies
+
+- `github.com/cockroachdb/pebble` - Persistent storage
+- `crypto/ed25519` - Digital signatures
+- `crypto/sha256` - Cryptographic hashing
+- `encoding/gob` - Binary serialization
+
+## Related Modules
+
+- **Wallet** - Transaction signing and verification
+- **Network** - Block and contract propagation
 - **Database** - Persistent storage layer
-- **Merkle** - Transaction verification
-- **API** - HTTP interface for blockchain operations
-- **CLI** - Command-line blockchain management
-
----
-
-*For more information, see the main [Foedus Blockchain README](../README.md)*
+- **Merkle** - Transaction/contract verification

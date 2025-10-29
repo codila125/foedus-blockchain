@@ -1,359 +1,181 @@
-# 🌳 Merkle Tree Module
+# Merkle Module
 
-> Cryptographic data structure for efficient transaction verification.
+Merkle tree implementation for efficient transaction and contract verification in blocks.
 
-Merkle trees enable compact representation and quick verification of large transaction sets. A single 32-byte root hash can verify thousands of transactions, making light clients and SPV possible.
+## Overview
 
----
+The merkle module provides a binary hash tree data structure used to create compact cryptographic proofs of data integrity. Each block in the Foedus blockchain uses Merkle roots to represent all transactions and contracts, enabling efficient verification without storing complete data sets.
 
-## ✨ Features
-
-- 🔐 **Cryptographic Security** - SHA-256 based tree construction
-- 📊 **Efficient Verification** - O(log n) proof size
-- 🎯 **Tamper Detection** - Any change invalidates the root
-- 💾 **Space Efficient** - Store only root hash in block header
-- ⚡ **Quick Validation** - Fast transaction existence proofs
-- 📱 **SPV Support** - Enable lightweight blockchain clients
-
-## 🏗️ Architecture
-
-### Core Component
-
-- **`merkle.go`** - Merkle tree and node implementation
-
-### Key Structures
-
-```go
-type MerkleTree struct {
-    RootNode *MerkleNode  // Root of the tree
-}
-
-type MerkleNode struct {
-    Left  *MerkleNode    // Left child
-    Right *MerkleNode    // Right child
-    Data  []byte         // SHA-256 hash
-}
-```
-
-## 🎯 How It Works
-
-### Tree Construction Process
-
-1. **Create leaf nodes** from transaction IDs
-2. **Pair adjacent nodes** and hash them together
-3. **Build parent nodes** from paired hashes
-4. **Repeat until single root** node remains
-5. **Root hash** represents all transactions
-
-### Visual Example
-
-```
-Transactions: [Tx1, Tx2, Tx3, Tx4]
-
-                  Root Hash
-                 /          \
-           Hash(12)          Hash(34)
-           /      \          /      \
-      Hash(1)  Hash(2)  Hash(3)  Hash(4)
-         |        |        |        |
-       Tx1      Tx2      Tx3      Tx4
-```
-
-### Odd Number of Transactions
-
-When there's an odd number of transactions, the last one is duplicated:
-
-```
-Transactions: [Tx1, Tx2, Tx3]
-
-                  Root Hash
-                 /          \
-           Hash(12)          Hash(33)
-           /      \          /      \
-      Hash(1)  Hash(2)  Hash(3)  Hash(3)
-         |        |        |        |
-       Tx1      Tx2      Tx3      Tx3 (duplicate)
-```
-
-## 🚀 Usage
-
-### Creating a Merkle Tree
-
-```go
-import "github.com/codila125/foedus-blockchain/merkle"
-
-// Collect transaction IDs
-txIDs := [][]byte{
-    tx1.ID,
-    tx2.ID,
-    tx3.ID,
-    tx4.ID,
-}
-
-// Create Merkle tree
-tree := merkle.NewMerkleTree(txIDs)
-
-// Get root hash
-rootHash := tree.RootNode.Data
-fmt.Printf("Merkle Root: %x\n", rootHash)
-```
-
-### In Block Creation
-
-```go
-// From blockchain/block.go
-func CreateBlock(txs []*Transaction, prevHash []byte) *Block {
-    block := &Block{
-        Transactions: txs,
-        PrevHash:     prevHash,
-    }
-    
-    // Create Merkle tree from transactions
-    block.HashTransactions()
-    
-    return block
-}
-
-func (b *Block) HashTransactions() []byte {
-    var txHashes [][]byte
-    
-    for _, tx := range b.Transactions {
-        txHashes = append(txHashes, tx.ID)
-    }
-    
-    tree := merkle.NewMerkleTree(txHashes)
-    return tree.RootNode.Data
-}
-```
-
-### Verification Example
-
-```go
-// Verify transaction exists in block
-func VerifyTransaction(block *Block, txID []byte) bool {
-    // Collect all transaction IDs
-    var txIDs [][]byte
-    for _, tx := range block.Transactions {
-        txIDs = append(txIDs, tx.ID)
-    }
-    
-    // Rebuild Merkle tree
-    tree := merkle.NewMerkleTree(txIDs)
-    
-    // Compare root with block's stored hash
-    return bytes.Equal(tree.RootNode.Data, block.Hash)
-}
-```
-
-## 🔐 Security Properties
-
-### Data Integrity
-- **Any change** to a transaction changes the root hash
-- **Tamper detection** is immediate and conclusive
-- **Cryptographic guarantee** via SHA-256
-
-### Efficient Verification
-- **Logarithmic proof size**: O(log n) vs O(n)
-- **Quick verification**: Don't need all transactions
-- **Partial data**: Can verify single transaction
-
-### Example Scenarios
-
-#### Scenario 1: Valid Block
-```
-Original:  [Tx1, Tx2, Tx3, Tx4] → Root: 0xABCD...
-Verify:    [Tx1, Tx2, Tx3, Tx4] → Root: 0xABCD... ✓ Valid
-```
-
-#### Scenario 2: Modified Transaction
-```
-Original:  [Tx1, Tx2, Tx3, Tx4] → Root: 0xABCD...
-Verify:    [Tx1, Tx2', Tx3, Tx4] → Root: 0x1234... ✗ Invalid
-```
-
-#### Scenario 3: Missing Transaction
-```
-Original:  [Tx1, Tx2, Tx3, Tx4] → Root: 0xABCD...
-Verify:    [Tx1, Tx2, Tx3] → Root: 0x5678... ✗ Invalid
-```
-
-## 💡 Advantages
-
-### Space Efficiency
-- Store only **root hash** in block header (32 bytes)
-- Don't need to store entire tree
-- Reconstruct tree when needed
-
-### Verification Speed
-- **Constant time** root verification
-- **Logarithmic** transaction existence proof
-- **Parallel** verification possible
-
-### Data Privacy
-- Can prove transaction exists **without revealing** all transactions
-- Light clients can verify **without full blockchain**
-- **Merkle proofs** enable SPV (Simplified Payment Verification)
-
-## 🔍 Use Cases in Foedus
-
-### 1. Block Validation
-```go
-// When receiving a new block
-func ValidateBlock(block *Block) bool {
-    // Rebuild Merkle tree
-    var txIDs [][]byte
-    for _, tx := range block.Transactions {
-        txIDs = append(txIDs, tx.ID)
-    }
-    tree := merkle.NewMerkleTree(txIDs)
-    
-    // Verify root matches
-    return bytes.Equal(tree.RootNode.Data, block.Hash)
-}
-```
-
-### 2. Transaction Verification
-```go
-// Verify transaction is in blockchain
-func TransactionInChain(chain *BlockChain, txID []byte) bool {
-    iter := chain.Iterator()
-    
-    for {
-        block := iter.Next()
-        for _, tx := range block.Transactions {
-            if bytes.Equal(tx.ID, txID) {
-                return true
-            }
-        }
-        if len(block.PrevHash) == 0 {
-            break
-        }
-    }
-    return false
-}
-```
-
-### 3. Light Client Support
-```go
-// Light client only needs block headers with Merkle roots
-type BlockHeader struct {
-    MerkleRoot []byte
-    PrevHash   []byte
-    Timestamp  int64
-}
-```
-
-## 📊 Performance Characteristics
-
-| Operation | Complexity | Description |
-|-----------|-----------|-------------|
-| Tree Construction | O(n) | Build tree from n transactions |
-| Root Retrieval | O(1) | Get root hash instantly |
-| Transaction Proof | O(log n) | Prove transaction exists |
-| Verification | O(log n) | Verify transaction in block |
-
-## 🧪 Testing Examples
-
-### Test Tree Construction
-```go
-func TestMerkleTree() {
-    // Create test data
-    data := [][]byte{
-        []byte("Transaction 1"),
-        []byte("Transaction 2"),
-        []byte("Transaction 3"),
-        []byte("Transaction 4"),
-    }
-    
-    // Build tree
-    tree := merkle.NewMerkleTree(data)
-    
-    // Verify root exists
-    if tree.RootNode == nil {
-        t.Error("Root node is nil")
-    }
-    
-    // Verify root has data
-    if len(tree.RootNode.Data) != 32 {
-        t.Error("Root hash incorrect length")
-    }
-}
-```
-
-### Test Odd Number of Transactions
-```go
-func TestOddTransactions() {
-    data := [][]byte{
-        []byte("Tx1"),
-        []byte("Tx2"),
-        []byte("Tx3"),
-    }
-    
-    tree := merkle.NewMerkleTree(data)
-    
-    // Should still create valid tree
-    if tree.RootNode == nil {
-        t.Error("Failed with odd transactions")
-    }
-}
-```
-
-## 📁 File Structure
+## Architecture
 
 ```
 merkle/
-├── merkle.go     # Merkle tree implementation
-└── README.md     # This file
+└── merkle.go    # Merkle tree and node implementation
 ```
 
-## 🔗 Dependencies
+**Components:**
+- **MerkleTree**: Binary hash tree with root node
+- **MerkleNode**: Tree node containing hash data and child references
 
-- `crypto/sha256` - SHA-256 hashing algorithm
+**Key Structure:**
+```go
+type MerkleTree struct {
+    RootNode *MerkleNode  // Root hash of entire tree
+}
 
-## 📚 Related Modules
-
-- **Blockchain** - Uses Merkle trees in blocks
-- **Transaction** - Provides data for tree construction
-- **Block** - Stores Merkle root
-
-## 🎯 Best Practices
-
-### ✅ Do
-- Build tree from transaction IDs (hashes)
-- Store only root hash in block
-- Rebuild tree for verification
-- Use SHA-256 for hashing
-
-### ❌ Don't
-- Don't store entire tree structure
-- Don't use weak hash functions
-- Don't skip tree validation
-- Don't modify tree after creation
-
-## 🔬 Advanced Concepts
-
-### Merkle Proof
-A Merkle proof is a set of hashes needed to verify a transaction:
-
-```
-To prove Tx1 exists:
-- Need: Hash(2), Hash(34)
-- Compute: Hash(1) → Hash(12) → Root
-- Compare with stored root
+type MerkleNode struct {
+    Left  *MerkleNode    // Left child node
+    Right *MerkleNode    // Right child node
+    Data  []byte         // SHA-256 hash (32 bytes)
+}
 ```
 
-### Simplified Payment Verification (SPV)
-Light clients can verify transactions without downloading full blockchain:
-1. Download block headers (with Merkle roots)
-2. Request Merkle proof for transaction
-3. Verify proof against stored root
+## Core Operations
 
-## 📖 Further Reading
+### Build Merkle Tree
 
-- [Bitcoin Whitepaper](https://bitcoin.org/bitcoin.pdf) - Section 7: Reclaiming Disk Space
-- [Merkle Tree Explained](https://en.wikipedia.org/wiki/Merkle_tree)
-- [SPV Clients](https://bitcoin.org/en/operating-modes-guide#simplified-payment-verification-spv)
+```go
+// Create tree from transaction IDs
+txIDs := [][]byte{tx1.ID, tx2.ID, tx3.ID, tx4.ID}
+tree := NewMerkleTree(txIDs)
 
----
+// Access root hash
+rootHash := tree.RootNode.Data
+```
 
-*For more information, see the main [Foedus Blockchain README](../README.md)*
+### Tree Construction Algorithm
+
+1. Create leaf nodes by hashing each data item
+2. If odd number of items, duplicate last item
+3. Pair adjacent nodes and hash concatenation
+4. Repeat pairing until single root remains
+
+**Example with 4 transactions:**
+```
+         Root
+        /    \
+      H12    H34
+     /  \   /  \
+    H1  H2 H3  H4
+    |   |  |   |
+   TX1 TX2 TX3 TX4
+```
+
+**Example with 3 transactions (duplicates last):**
+```
+         Root
+        /    \
+      H12    H33
+     /  \   /  \
+    H1  H2 H3  H3*
+    |   |  |   |
+   TX1 TX2 TX3 TX3 (duplicated)
+```
+
+## Usage in Blockchain
+
+### Block Transaction Root
+
+```go
+// Get all transaction IDs from block
+txHashes := make([][]byte, len(block.Transactions))
+for i, tx := range block.Transactions {
+    txHashes[i] = tx.ID
+}
+
+// Build Merkle tree
+tree := NewMerkleTree(txHashes)
+
+// Store root in block (used in PoW)
+block.TxRoot = tree.RootNode.Data
+```
+
+### Block Contract Root
+
+```go
+// Get all contract IDs from block
+contractHashes := make([][]byte, len(block.Contracts))
+for i, contract := range block.Contracts {
+    contractHashes[i] = contract.ID
+}
+
+// Build Merkle tree
+tree := NewMerkleTree(contractHashes)
+
+// Store root in block
+block.ContractRoot = tree.RootNode.Data
+```
+
+### Empty Block Handling
+
+```go
+// No transactions/contracts
+if len(transactions) == 0 {
+    return []byte{}  // Empty root
+}
+
+// Has transactions/contracts
+tree := NewMerkleTree(transactionIDs)
+return tree.RootNode.Data
+```
+
+## Implementation Details
+
+### Node Creation
+
+**Leaf Node (has data):**
+```go
+node := NewMerkleNode(nil, nil, data)
+// Hashes: SHA256(data)
+```
+
+**Internal Node (has children):**
+```go
+node := NewMerkleNode(leftChild, rightChild, nil)
+// Hashes: SHA256(leftChild.Data + rightChild.Data)
+```
+
+### Odd Number Handling
+
+When building tree with odd number of leaves:
+```go
+if len(data)%2 != 0 {
+    data = append(data, data[len(data)-1])  // Duplicate last
+}
+```
+
+This ensures all levels have pairs for proper tree construction.
+
+## Benefits
+
+**Data Integrity:**
+- Any change to a transaction invalidates the root hash
+- Tamper-evident: changing one leaf changes entire path to root
+
+**Efficiency:**
+- Store only 32-byte root instead of all transaction data
+- Verify transaction existence with O(log n) hashes
+- Compact proofs for lightweight clients
+
+**Use Cases:**
+1. Transaction/contract verification
+2. Proof of Work (Merkle roots in block hash)
+3. Data integrity detection
+
+## Algorithm Complexity
+
+- **Construction**: O(n) - Linear in number of leaves
+- **Space**: O(n) - Stores all nodes in tree
+- **Verification**: O(log n) - Path from leaf to root
+- **Root Access**: O(1) - Direct pointer
+
+**Hash Function**: SHA-256 (32-byte output)
+
+## Dependencies
+
+- `crypto/sha256` - Cryptographic hash function
+
+## Related Modules
+
+- **Blockchain** - Uses Merkle roots for transaction/contract integrity
+- **Proof** - Merkle roots included in PoW computation
