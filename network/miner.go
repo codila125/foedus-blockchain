@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"time"
@@ -16,6 +17,10 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	peerstore "github.com/libp2p/go-libp2p/core/peer"
 	multiaddr "github.com/multiformats/go-multiaddr"
+)
+
+const (
+	minerShutdownTimeout = 30 * time.Second
 )
 
 func createMinerNode() host.Host {
@@ -71,14 +76,63 @@ func RunMinerNode(port, Address string) {
 	log.Printf("[MINER] Node is now ready to handle network requests and mine blocks")
 	HandleNetworkRequests(minerNode, chain, port)
 
-	// wait for interrupt signal to gracefully shut down the node
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
-	<-ch
-	log.Print("[MINER] Shutting down...")
+	// Set up graceful shutdown
+	gracefulMinerShutdown(minerNode, chain)
+}
 
-	// shut the node down
-	if err := minerNode.Close(); err != nil {
-		panic(err)
+// gracefulMinerShutdown handles signal interrupts and orchestrates resource cleanup for miner nodes
+func gracefulMinerShutdown(minerNode host.Host, chain *blockchain.BlockChain) {
+	shutdownChan := make(chan os.Signal, 1)
+	signal.Notify(shutdownChan, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
+
+	sig := <-shutdownChan
+	log.Printf("[MINER] Shutting down: %v", sig)
+	shutdownMinerNode(minerNode, chain)
+}
+
+// shutdownMinerNode orchestrates the graceful shutdown sequence for the miner node
+func shutdownMinerNode(minerNode host.Host, chain *blockchain.BlockChain) {
+	var wg sync.WaitGroup
+
+	// Create a context with timeout for the entire shutdown process
+	ctx, cancel := context.WithTimeout(context.Background(), minerShutdownTimeout)
+	defer cancel()
+
+	log.Println("[MINER] Starting shutdown sequence...")
+
+	// Stop accepting new network connections and clean up streams
+	wg.Go(func() {
+		log.Println("[MINER] Closing network node...")
+		if err := minerNode.Close(); err != nil {
+			log.Printf("[MINER] Error closing network node: %v", err)
+		} else {
+			log.Println("[MINER] Network node closed successfully")
+		}
+	})
+
+	// Close database and other blockchain resources
+	wg.Go(func() {
+		log.Println("[MINER] Closing blockchain database...")
+		if err := chain.Database.Close(); err != nil {
+			log.Printf("[MINER] Error closing database: %v", err)
+		} else {
+			log.Println("[MINER] Blockchain database closed successfully")
+		}
+	})
+
+	// Wait for all shutdown tasks to complete or timeout
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		log.Println("[MINER] Shutdown completed successfully")
+		os.Exit(0)
+	case <-ctx.Done():
+		log.Println("[MINER] Shutdown timeout exceeded, forcing exit")
+		os.Exit(1)
 	}
 }
