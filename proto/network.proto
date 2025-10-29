@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package network;
+
+option go_package = "github.com/codila125/foedus-blockchain/protobuf";
+
+message HeightData {
+    int32 height =1;
+}
+
+message VersionData {
+    int32 height = 1;
+    bytes last_hash = 2;
+    string node_id = 3;
+}
+
+message BlockData {
+    string command = 1;
+    bytes hash = 2;
+    int32 height = 3;
+    bytes data = 4;
+}
+
+// export PATH=$PATH:$HOME/go/bin
+// source ~/.zshrc
+// protoc -I=./proto --go_out=./protobuf proto/network.proto
