@@ -1,3 +1,7 @@
+// Package blockchain manages the Unspent Transaction Output (UTXO) set, which is
+// a critical component for tracking the ownership of cryptocurrency. The UTXO set
+// is an index of all unspent outputs, enabling efficient validation of new
+// transactions.
 package blockchain
 
 import (
@@ -8,49 +12,53 @@ import (
 	"github.com/cockroachdb/pebble"
 )
 
-var UTXOPrefix = []byte("utxo-") // Prefix for UTXO entries in the database
+// UTXOPrefix is a database key prefix used to distinguish UTXO entries from other
+// data stored in the database. This helps in organizing and querying the UTXO set.
+var UTXOPrefix = []byte("utxo-")
 
+// UTXOSet provides a high-level interface for managing the collection of unspent
+// transaction outputs. It is tightly coupled with the blockchain to ensure that
+// the UTXO set is always in sync with the state of the chain.
 type UTXOSet struct {
-	Blockchain *BlockChain // Reference to the blockchain
+	Blockchain *BlockChain
 }
 
+// FindUTXO scans the entire blockchain to identify all unspent transaction outputs.
+// It iterates through each block, tracking which outputs have been spent and which
+// remain available. This function is foundational for building the UTXO set from scratch.
+// It returns a map where keys are transaction IDs and values are the unspent outputs.
 func (blockchain *BlockChain) FindUTXO() map[string]TxOutputs {
-	/*
-		Scans the entire blockchain to find all unspent transaction outputs (UTXOs).
-		Returns a map where the key is the transaction ID and the value is the corresponding unspent outputs.
-	*/
-	UTXO := make(map[string]TxOutputs)        // UTXO map to hold unspent transaction outputs
-	spentTXs := make(map[string]map[int]bool) // Map to track spent transaction outputs for O(1) lookup
+	UTXO := make(map[string]TxOutputs)
+	spentTXs := make(map[string]map[int]bool)
 
-	iterator := blockchain.Iterator() // Create an iterator to traverse the blockchain
+	iterator := blockchain.Iterator()
 
 	for {
-		block := iterator.Next() // Get the next block
+		block := iterator.Next()
 
-		for _, tx := range block.Transactions { // Iterate over each transaction in the block
-			txID := hex.EncodeToString(tx.ID) // Encode transaction ID to string
+		for _, tx := range block.Transactions {
+			txID := hex.EncodeToString(tx.ID)
 
-			for outIdx, out := range tx.Outputs { // Iterate over each output in the transaction
-				// If the output is already spent, skip it
+			for outIdx, out := range tx.Outputs {
 				if spentTXs[txID] != nil && spentTXs[txID][outIdx] {
 					continue
 				}
-				outs := UTXO[txID]                       // Initialize outputs for this transaction ID
-				outs.Outputs = append(outs.Outputs, out) // Add the unspent output
-				UTXO[txID] = outs                        // Update the UTXO map with the new output
+				outs := UTXO[txID]
+				outs.Outputs = append(outs.Outputs, out)
+				UTXO[txID] = outs
 			}
-			// If the transaction is not a coinbase, mark its inputs as spent
+
 			if !tx.IsCoinbaseTx() {
 				for _, in := range tx.Inputs {
 					inTxID := hex.EncodeToString(in.ID)
 					if spentTXs[inTxID] == nil {
 						spentTXs[inTxID] = make(map[int]bool)
 					}
-					spentTXs[inTxID][in.Out] = true // Mark the output as spent
+					spentTXs[inTxID][in.Out] = true
 				}
 			}
 		}
-		// If we've reached the genesis block, stop iterating
+
 		if len(block.PrevHash) == 0 {
 			break
 		}
@@ -58,28 +66,27 @@ func (blockchain *BlockChain) FindUTXO() map[string]TxOutputs {
 	return UTXO
 }
 
+// Reindex rebuilds the UTXO set from the ground up by scanning the entire
+// blockchain. This operation is typically performed when the UTXO set is created
+// for the first time or if it becomes corrupted. It ensures the UTXO index is
+// consistent with the blockchain's history.
 func (u *UTXOSet) Reindex() {
-	/*
-		Rebuilds the UTXO set into the database from scratch
-		by deleting the previous UTXO set and scanning the entire
-		blockchain to find all unspent transaction outputs.
-	*/
 	log.Printf("[UTXO] Starting UTXO set reindexing")
 
-	db := u.Blockchain.Database.GetRawDB() // Get the database from the blockchain
+	db := u.Blockchain.Database.GetRawDB()
 
-	u.DeleteByPrefix(UTXOPrefix) // Delete existing UTXO entries with the specified prefix
+	u.DeleteByPrefix(UTXOPrefix)
 
-	UTXOs := u.Blockchain.FindUTXO() // Find all unspent transaction outputs in the blockchain
+	UTXOs := u.Blockchain.FindUTXO()
 
 	batch := db.NewBatch()
 
-	for txID, outs := range UTXOs { // Iterate over each transaction ID and its outputs
+	for txID, outs := range UTXOs {
 		key, err := hex.DecodeString(txID)
 		if err != nil {
 			log.Panic(err)
 		}
-		key = append(UTXOPrefix, key...) // Prefix the key with "utxo-"
+		key = append(UTXOPrefix, key...)
 
 		err = batch.Set(key, outs.SerializeOutputs(), nil)
 		Handle(err)
@@ -93,11 +100,11 @@ func (u *UTXOSet) Reindex() {
 	log.Printf("[UTXO] UTXO set reindexed successfully - %d transaction(s) in set", count)
 }
 
+// Update modifies the UTXO set to reflect the transactions in a newly added block.
+// It removes outputs that have been spent and adds the new outputs created in the
+// block's transactions. This keeps the UTXO set current with the latest state of
+// the blockchain.
 func (u *UTXOSet) Update(block *Block) {
-	/*
-		Updates the UTXO set with the transactions from the given block.
-		Removes spent outputs and adds new outputs from the block's transactions.
-	*/
 	log.Printf("[UTXO] Updating UTXO set with block %x", block.Hash)
 	db := u.Blockchain.Database.GetRawDB()
 
@@ -107,7 +114,7 @@ func (u *UTXOSet) Update(block *Block) {
 		if !tx.IsCoinbaseTx() {
 			for _, in := range tx.Inputs {
 				updatedOuts := TxOutputs{}
-				inID := append(UTXOPrefix, in.ID...) // Prefix the input transaction ID with "utxo-"
+				inID := append(UTXOPrefix, in.ID...)
 
 				item, closer, err := db.Get(inID)
 				if err != nil && err != pebble.ErrNotFound {
@@ -123,18 +130,9 @@ func (u *UTXOSet) Update(block *Block) {
 				copy(itemCopy, item)
 				closer.Close()
 
-				outs := DeserializeOutputs(itemCopy) // Deserialize the outputs
+				outs := DeserializeOutputs(itemCopy)
 
-				// Remove the spent output from the outputs list
-				// by adding only those outputs which are not spent
-				// to the updated outputs list
-				// If all outputs are spent, the entry will be deleted
-				// from the database
-				// If some outputs remain unspent, the entry will be updated
-				// with the remaining unspent outputs
-				// This ensures that the UTXO set accurately reflects
-				// the current state of unspent outputs after processing
-				// the transactions in the block
+				// Remove spent outputs by creating a new list of unspent ones.
 				for outIdx, out := range outs.Outputs {
 					if outIdx != in.Out {
 						updatedOuts.Outputs = append(updatedOuts.Outputs, out)
@@ -142,28 +140,24 @@ func (u *UTXOSet) Update(block *Block) {
 				}
 
 				if len(updatedOuts.Outputs) == 0 {
-					if err := batch.Delete(inID, &pebble.WriteOptions{}); err != nil {
+					if err := batch.Delete(inID, nil); err != nil {
 						log.Panic(err)
 					}
 				} else {
-					if err := batch.Set(inID, updatedOuts.SerializeOutputs(), &pebble.WriteOptions{}); err != nil {
+					if err := batch.Set(inID, updatedOuts.SerializeOutputs(), nil); err != nil {
 						log.Panic(err)
 					}
 				}
 			}
+		}
 
-			// Add new outputs from the transaction to the UTXO set
-			// by creating a new UTXO entry for the transaction ID
-			// and storing the serialized outputs in the database
-			// This ensures that the UTXO set includes all new outputs
-			// created by the transactions in the block
-			newOutputs := TxOutputs{}
-			newOutputs.Outputs = append(newOutputs.Outputs, tx.Outputs...)
+		// Add new outputs from the transaction to the UTXO set.
+		newOutputs := TxOutputs{}
+		newOutputs.Outputs = append(newOutputs.Outputs, tx.Outputs...)
 
-			txID := append(UTXOPrefix, tx.ID...)
-			if err := batch.Set(txID, newOutputs.SerializeOutputs(), &pebble.WriteOptions{}); err != nil {
-				log.Panic(err)
-			}
+		txID := append(UTXOPrefix, tx.ID...)
+		if err := batch.Set(txID, newOutputs.SerializeOutputs(), nil); err != nil {
+			log.Panic(err)
 		}
 	}
 
@@ -175,10 +169,11 @@ func (u *UTXOSet) Update(block *Block) {
 	log.Printf("[UTXO] UTXO set updated successfully")
 }
 
+// DeleteByPrefix removes all UTXO entries from the database that match a given
+// prefix. This is used during reindexing to clear the old UTXO set. The deletion
+// is performed in batches to handle large datasets efficiently without consuming
+// excessive memory.
 func (u *UTXOSet) DeleteByPrefix(prefix []byte) {
-	/*
-		Delete all UTXO entries with the given prefix in chunks
-	*/
 	db := u.Blockchain.Database.GetRawDB()
 
 	iter, _ := db.NewIter(&pebble.IterOptions{})
@@ -192,7 +187,6 @@ func (u *UTXOSet) DeleteByPrefix(prefix []byte) {
 
 	for iter.SeekGE(prefix); iter.Valid(); iter.Next() {
 		key := iter.Key()
-		// Stop if we've gone past the prefix
 		if !bytes.HasPrefix(key, prefix) {
 			break
 		}
@@ -202,37 +196,31 @@ func (u *UTXOSet) DeleteByPrefix(prefix []byte) {
 		keysForDelete = append(keysForDelete, keyCopy)
 		keysCollected++
 
-		// If we've collected enough keys, delete them in a batch
+		// Delete keys in batches to manage memory usage.
 		if keysCollected == collectSize {
-			// Delete collected keys in batch
 			batch := db.NewBatch()
-
 			for _, delKey := range keysForDelete {
 				if err := batch.Delete(delKey, nil); err != nil {
 					log.Panic(err)
 				}
 			}
-
 			if err := db.Apply(batch, &pebble.WriteOptions{Sync: true}); err != nil {
 				log.Panic(err)
 			}
 			batch.Close()
-
-			keysForDelete = make([][]byte, 0, collectSize) // Reset the slice for the next batch
+			keysForDelete = make([][]byte, 0, collectSize)
 			keysCollected = 0
 		}
 	}
 
-	// Delete any remaining keys that didn't make up a full batch
+	// Delete any remaining keys.
 	if keysCollected > 0 {
 		batch := db.NewBatch()
-
 		for _, delKey := range keysForDelete {
 			if err := batch.Delete(delKey, nil); err != nil {
 				log.Panic(err)
 			}
 		}
-
 		if err := db.Apply(batch, &pebble.WriteOptions{Sync: true}); err != nil {
 			log.Panic(err)
 		}
@@ -240,21 +228,17 @@ func (u *UTXOSet) DeleteByPrefix(prefix []byte) {
 	}
 }
 
+// CountTransactions returns the total number of transactions currently held in
+// the UTXO set. This provides a quick way to gauge the size of the UTXO set.
 func (u UTXOSet) CountTransactions() int {
-	/*
-		Counts the number of transactions in the UTXO set.
-		Returns the count as an integer.
-	*/
 	db := u.Blockchain.Database.GetRawDB()
 	count := 0
 
-	// Create iterator for prefix scan
 	iter, _ := db.NewIter(&pebble.IterOptions{})
 	defer func() {
 		_ = iter.Close()
 	}()
 
-	// Count UTXO entries with the specified prefix
 	for iter.SeekGE(UTXOPrefix); iter.Valid(); iter.Next() {
 		if !bytes.HasPrefix(iter.Key(), UTXOPrefix) {
 			break
@@ -265,33 +249,29 @@ func (u UTXOSet) CountTransactions() int {
 	return count
 }
 
+// FindUnspentTransactions retrieves all unspent transaction outputs (UTXOs)
+// that are locked with the given public key hash. This function is essential
+// for calculating a user's balance and gathering inputs for a new transaction.
 func (u UTXOSet) FindUnspentTransactions(pubKeyHash []byte) []TxOutput {
-	/*
-		Finds and returns all unspent transaction outputs (UTXOs) for the given public key hash.
-	*/
 	var UTXOs []TxOutput
 	db := u.Blockchain.Database.GetRawDB()
 
-	// Create iterator for prefix scan
 	iter, _ := db.NewIter(&pebble.IterOptions{})
 	defer func() {
 		_ = iter.Close()
 	}()
 
-	// Iterate over all UTXO entries with the specified prefix
 	for iter.SeekGE(UTXOPrefix); iter.Valid(); iter.Next() {
 		if !bytes.HasPrefix(iter.Key(), UTXOPrefix) {
 			break
 		}
 
-		// Copy value before using it
 		v := iter.Value()
 		valueCopy := make([]byte, len(v))
 		copy(valueCopy, v)
 
-		outs := DeserializeOutputs(valueCopy) // Deserialize the outputs
+		outs := DeserializeOutputs(valueCopy)
 
-		// Check each output to see if it is locked with the given public key hash i.e., belongs to the address
 		for _, out := range outs.Outputs {
 			if out.IsLockedWithKey(pubKeyHash) {
 				UTXOs = append(UTXOs, out)
@@ -302,22 +282,20 @@ func (u UTXOSet) FindUnspentTransactions(pubKeyHash []byte) []TxOutput {
 	return UTXOs
 }
 
+// FindSpendableOutputs discovers unspent transaction outputs that can be used to
+// fund a new transaction. It accumulates outputs locked with the given public key
+// hash until the total value meets or exceeds the required amount. It returns the
+// accumulated value and a map of transaction IDs to their spendable output indices.
 func (u UTXOSet) FindSpendableOutputs(pubKeyHash []byte, amount int) (int, map[string][]int) {
-	/*
-		Finds and returns spendable outputs for a given public key hash that sum up to at least the specified amount.
-		Returns the total accumulated amount and a map of transaction IDs to output indices.
-	*/
-	unspentOutputs := make(map[string][]int) // Map to hold unspent outputs
+	unspentOutputs := make(map[string][]int)
 	accumulated := 0
 	db := u.Blockchain.Database.GetRawDB()
 
-	// Create iterator for prefix scan
 	iter, _ := db.NewIter(&pebble.IterOptions{})
 	defer func() {
 		_ = iter.Close()
 	}()
 
-	// Iterate over all UTXO entries
 	for iter.SeekGE(UTXOPrefix); iter.Valid(); iter.Next() {
 		if !bytes.HasPrefix(iter.Key(), UTXOPrefix) {
 			break
@@ -326,7 +304,6 @@ func (u UTXOSet) FindSpendableOutputs(pubKeyHash []byte, amount int) (int, map[s
 		key := iter.Key()
 		v := iter.Value()
 
-		// Copy key and value before using them
 		keyTrimmed := bytes.TrimPrefix(key, UTXOPrefix)
 		keyTrimmedCopy := make([]byte, len(keyTrimmed))
 		copy(keyTrimmedCopy, keyTrimmed)
@@ -336,9 +313,6 @@ func (u UTXOSet) FindSpendableOutputs(pubKeyHash []byte, amount int) (int, map[s
 		copy(valueCopy, v)
 		outs := DeserializeOutputs(valueCopy)
 
-		// Check each output to see if it is locked with the given public key hash
-		// If it is, add its value to the accumulated amount and record its index
-		// Stop if we've accumulated enough to cover the requested amount
 		for outIdx, out := range outs.Outputs {
 			if out.IsLockedWithKey(pubKeyHash) && accumulated < amount {
 				accumulated += out.Value

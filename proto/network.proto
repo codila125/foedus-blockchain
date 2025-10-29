@@ -4,16 +4,19 @@ package network;
 
 option go_package = "github.com/codila125/foedus-blockchain/protobuf";
 
+// HeightData represents the height of a blockchain.
 message HeightData {
-    int32 height =1;
+    int32 height = 1;
 }
 
+// VersionData contains version information about a node's blockchain.
 message VersionData {
     int32 height = 1;
     bytes last_hash = 2;
     string node_id = 3;
 }
 
+// BlockData is a generic message for sending block-related data.
 message BlockData {
     string command = 1;
     bytes hash = 2;

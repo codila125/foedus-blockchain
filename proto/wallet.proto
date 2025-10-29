@@ -4,10 +4,6 @@ package wallet;
 
 option go_package = "github.com/codila125/foedus-blockchain/protobuf";
 
-// ============================================================================
-// Wallet Structures
-// ============================================================================
-
 // Wallet represents a single wallet with private and public keys
 message Wallet {
     bytes private_key = 1;

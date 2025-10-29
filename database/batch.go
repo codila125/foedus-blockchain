@@ -2,10 +2,12 @@ package database
 
 import (
 	"fmt"
+
 	"github.com/cockroachdb/pebble"
 )
 
-// BatchWriter handles batch writing to database with automatic flushing
+// BatchWriter facilitates efficient batch writes to the database with automatic flushing
+// at specified intervals to balance performance and memory usage.
 type BatchWriter struct {
 	rawDB      *pebble.DB
 	batch      *pebble.Batch
@@ -13,7 +15,7 @@ type BatchWriter struct {
 	flushEvery int
 }
 
-// NewBatchWriter creates a new batch writer with specified flush interval
+// NewBatchWriter creates a new batch writer that automatically flushes every N writes.
 func NewBatchWriter(rawDB *pebble.DB, flushEvery int) *BatchWriter {
 	return &BatchWriter{
 		rawDB:      rawDB,
@@ -22,7 +24,7 @@ func NewBatchWriter(rawDB *pebble.DB, flushEvery int) *BatchWriter {
 	}
 }
 
-// Write adds a key-value pair to the batch and flushes if needed
+// Write adds a key-value pair to the batch, automatically flushing when the threshold is reached.
 func (bw *BatchWriter) Write(key, value []byte) error {
 	if err := bw.batch.Set(key, value, nil); err != nil {
 		return fmt.Errorf("failed to write to batch: %w", err)
@@ -30,7 +32,6 @@ func (bw *BatchWriter) Write(key, value []byte) error {
 
 	bw.count++
 
-	// Auto-flush every N writes
 	if bw.count%bw.flushEvery == 0 {
 		if err := bw.Flush(false); err != nil {
 			return err
@@ -40,7 +41,7 @@ func (bw *BatchWriter) Write(key, value []byte) error {
 	return nil
 }
 
-// Flush applies the current batch to the database
+// Flush writes all pending changes in the batch to the database.
 func (bw *BatchWriter) Flush(sync bool) error {
 	opts := &pebble.WriteOptions{Sync: sync}
 	if err := bw.rawDB.Apply(bw.batch, opts); err != nil {

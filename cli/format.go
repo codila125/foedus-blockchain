@@ -6,10 +6,10 @@ import (
 	"github.com/codila125/foedus-blockchain/blockchain"
 )
 
+// printBlockHeader formats and prints the header of a given block, including
+// its hash, previous hash, timestamp, nonce, height, and proof-of-work
+// validation status. This provides a concise summary of the block's metadata.
 func (cli *CommandLine) printBlockHeader(block *blockchain.Block, blockNumber int) {
-	/*
-		Prints the block header with hash, timestamp, nonce, height, and PoW validation.
-	*/
 	fmt.Println("\n" + "╔" + fmt.Sprintf("═══ BLOCK [#%d] ═══════════════════════════════════════════╗", blockNumber))
 	fmt.Printf("║ Hash:     %x\n", block.Hash)
 	fmt.Printf("║ Prev Hash: %x\n", block.PrevHash)
@@ -17,7 +17,6 @@ func (cli *CommandLine) printBlockHeader(block *blockchain.Block, blockNumber in
 	fmt.Printf("║ Nonce:     %d\n", block.Nonce)
 	fmt.Printf("║ Height:    %d\n", block.Height)
 
-	// Validate PoW
 	pow := blockchain.NewProof(block)
 	isValid := pow.Validate()
 	powStatus := "✓ VALID"
@@ -28,10 +27,10 @@ func (cli *CommandLine) printBlockHeader(block *blockchain.Block, blockNumber in
 	fmt.Println("╟" + "─────────────────────────────────────────────────────────────")
 }
 
+// printBlockContracts iterates through and prints all contracts contained
+// within a block. If the block has no contracts, it displays a corresponding
+// message.
 func (cli *CommandLine) printBlockContracts(block *blockchain.Block) {
-	/*
-		Prints all contracts in the block with proper formatting and indentation.
-	*/
 	fmt.Printf("║ CONTRACTS (%d):\n", len(block.Contracts))
 	if len(block.Contracts) == 0 {
 		fmt.Println("║   (No Contracts)")
@@ -42,10 +41,10 @@ func (cli *CommandLine) printBlockContracts(block *blockchain.Block) {
 	}
 }
 
+// printContractWithBox formats and prints the details of a single contract in a
+// structured, boxed layout. It includes the contract's ID, title, status,
+// creator, parties, and milestones, providing a comprehensive view of its state.
 func (cli *CommandLine) printContractWithBox(contract *blockchain.Contract, contractNumber int) {
-	/*
-		Prints a single contract with a nicely formatted box.
-	*/
 	fmt.Printf("║   ┌─ Contract #%d ────────────────────────────────────────┐\n", contractNumber)
 	fmt.Printf("║   │ ╭─── CONTRACT [%.32x] ───╮\n", contract.ID)
 	fmt.Printf("║   │ │ Title: %s\n", contract.Title)
@@ -79,10 +78,10 @@ func (cli *CommandLine) printContractWithBox(contract *blockchain.Contract, cont
 	fmt.Println("║   └───────────────────────────────────────────────────────────┘")
 }
 
+// printBlockTransactions formats and prints all transactions within a given
+// block. It serves as a container for individual transaction printouts,
+// ensuring a consistent and readable format.
 func (cli *CommandLine) printBlockTransactions(block *blockchain.Block) {
-	/*
-		Prints all transactions in the block with proper formatting and indentation.
-	*/
 	fmt.Println("╟" + "─────────────────────────────────────────────────────────────")
 	fmt.Printf("║ TRANSACTIONS (%d):\n", len(block.Transactions))
 	if len(block.Transactions) == 0 {
@@ -94,14 +93,13 @@ func (cli *CommandLine) printBlockTransactions(block *blockchain.Block) {
 	}
 }
 
+// printTransactionWithBox formats and prints the details of a single
+// transaction in a structured, boxed layout. It clearly separates inputs and
+// outputs, and distinguishes coinbase transactions from standard ones.
 func (cli *CommandLine) printTransactionWithBox(tx *blockchain.Transaction, txNumber int) {
-	/*
-		Prints a single transaction with a nicely formatted box.
-	*/
 	fmt.Printf("║   ┌─ Transaction #%d ──────────────────────────────────────┐\n", txNumber)
 	fmt.Printf("║   │ ╭─── TRANSACTION [%.32x] ───╮\n", tx.ID)
 
-	// Inputs Section
 	fmt.Printf("║   │ ├─ INPUTS (%d)\n", len(tx.Inputs))
 	if len(tx.Inputs) == 0 {
 		fmt.Println("║   │ │   (No Inputs)")
@@ -116,7 +114,6 @@ func (cli *CommandLine) printTransactionWithBox(tx *blockchain.Transaction, txNu
 		}
 	}
 
-	// Outputs Section
 	fmt.Printf("║   │ ├─ OUTPUTS (%d)\n", len(tx.Outputs))
 	if len(tx.Outputs) == 0 {
 		fmt.Println("║   │ │   (No Outputs)")
@@ -131,9 +128,8 @@ func (cli *CommandLine) printTransactionWithBox(tx *blockchain.Transaction, txNu
 	fmt.Println("║   └───────────────────────────────────────────────────────────┘")
 }
 
+// printBlockFooter prints the closing border for the block's formatted
+// output, visually encapsulating the block's information.
 func (cli *CommandLine) printBlockFooter() {
-	/*
-		Prints the block footer to close the visual box.
-	*/
 	fmt.Println("╚" + "═══════════════════════════════════════════════════════════════")
 }

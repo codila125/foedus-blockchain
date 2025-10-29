@@ -1,3 +1,6 @@
+// Package network implements the peer-to-peer networking layer for the Foedus blockchain.
+// It uses libp2p to handle node communication, data synchronization, and the propagation
+// of new blocks and contracts across the network.
 package network
 
 import (
@@ -13,6 +16,9 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// HandleNetworkRequests sets up stream handlers for all supported network protocols.
+// It listens for incoming messages from peers and dispatches them to the appropriate
+// handler based on the command received.
 func HandleNetworkRequests(h host.Host, chain *blockchain.BlockChain, nodeID string) {
 	h.SetStreamHandler(protocolID, func(stream network.Stream) {
 		buf := make([]byte, 1024)
@@ -27,14 +33,19 @@ func HandleNetworkRequests(h host.Host, chain *blockchain.BlockChain, nodeID str
 		log.Printf("[NETWORK] ← Received command from %s: %s", stream.Conn().RemotePeer(), command)
 
 		switch command {
+		// Responds with the entire local blockchain.
 		case "GET_BLOCKCHAIN":
 			HandleGetBlockchainRequest(h, stream, chain)
+		// Responds with blocks newer than a specified height.
 		case "GET_BLOCKS":
 			HandleGetBlocksRequest(h, stream, chain)
+		// Responds with the node's current blockchain version information.
 		case "GET_VERSION":
 			HandleGetVersionRequest(h, stream, chain, nodeID)
+		// Handles a new contract, mines it into a block, and broadcasts the block.
 		case "NEW_CONTRACT":
 			HandleReceiveContractRequest(h, stream, chain)
+		// Handles a new block and adds it to the local blockchain.
 		case "NEW_BLOCK":
 			HandleReceiveNewBlockRequest(h, stream, chain)
 		default:
@@ -43,18 +54,20 @@ func HandleNetworkRequests(h host.Host, chain *blockchain.BlockChain, nodeID str
 	})
 }
 
+// HandleGetBlockchainRequest responds to a peer's request for the entire blockchain.
+// It sends all block hashes in chronological order, allowing the peer to reconstruct the chain.
 func HandleGetBlockchainRequest(h host.Host, s network.Stream, chain *blockchain.BlockChain) {
 	defer s.Close()
 
 	blockHashes := chain.GetBlockHashes()
 	log.Printf("[NETWORK] Sending %d blocks to peer %s", len(blockHashes), s.Conn().RemotePeer())
 
-	// Reverse block hashes to send in chronological order (genesis first)
+	// The GetBlockHashes method returns hashes from newest to oldest.
+	// Reverse the slice to send them in chronological order (genesis first).
 	for i, j := 0, len(blockHashes)-1; i < j; i, j = i+1, j-1 {
 		blockHashes[i], blockHashes[j] = blockHashes[j], blockHashes[i]
 	}
 
-	// Use modular SendBlocks function
 	if err := SendBlocks(s, blockHashes, chain.GetBlock); err != nil {
 		log.Printf("[NETWORK] Error sending blocks: %v", err)
 		return
@@ -63,11 +76,11 @@ func HandleGetBlockchainRequest(h host.Host, s network.Stream, chain *blockchain
 	log.Printf("[NETWORK] Blockchain transmission complete")
 }
 
-// HandleGetBlocksRequest responds with only blocks after the requested height
+// HandleGetBlocksRequest responds to a peer's request for blocks after a specific height.
+// This is used for syncing a peer that is partially behind the current chain height.
 func HandleGetBlocksRequest(h host.Host, s network.Stream, chain *blockchain.BlockChain) {
 	defer s.Close()
 
-	// Receive the height from requester with length prefix
 	reader := bufio.NewReader(s)
 	lenBuf := make([]byte, 4)
 	_, err := io.ReadFull(reader, lenBuf)
@@ -84,7 +97,6 @@ func HandleGetBlocksRequest(h host.Host, s network.Stream, chain *blockchain.Blo
 		return
 	}
 
-	// Unmarshal height data using protobuf
 	heightData := &protobuf.HeightData{}
 	err = proto.Unmarshal(buf, heightData)
 	if err != nil {
@@ -95,10 +107,9 @@ func HandleGetBlocksRequest(h host.Host, s network.Stream, chain *blockchain.Blo
 
 	log.Printf("[NETWORK] Peer %s requesting blocks after height %d", s.Conn().RemotePeer(), requestedHeight)
 
-	// Get all block hashes
 	allBlockHashes := chain.GetBlockHashes()
 
-	// Filter to only send blocks with height > requestedHeight
+	// Filter the block hashes to include only those with a height greater than the peer's height.
 	var blocksToSend [][]byte
 	for _, hash := range allBlockHashes {
 		block, err := chain.GetBlock(hash)
@@ -114,7 +125,6 @@ func HandleGetBlocksRequest(h host.Host, s network.Stream, chain *blockchain.Blo
 
 	log.Printf("[NETWORK] Sending %d blocks (after height %d) to peer %s", len(blocksToSend), requestedHeight, s.Conn().RemotePeer())
 
-	// Send filtered blocks
 	if err := SendBlocks(s, blocksToSend, chain.GetBlock); err != nil {
 		log.Printf("[NETWORK] Error sending blocks: %v", err)
 		return
@@ -123,7 +133,8 @@ func HandleGetBlocksRequest(h host.Host, s network.Stream, chain *blockchain.Blo
 	log.Printf("[NETWORK] Block transmission complete")
 }
 
-// HandleGetVersionRequest responds to version requests with local blockchain info
+// HandleGetVersionRequest responds to a version request from a peer. It sends the local
+// blockchain's height and the hash of the latest block, allowing peers to compare chain states.
 func HandleGetVersionRequest(h host.Host, s network.Stream, chain *blockchain.BlockChain, nodeID string) {
 	defer s.Close()
 
@@ -165,14 +176,15 @@ func HandleGetVersionRequest(h host.Host, s network.Stream, chain *blockchain.Bl
 	}
 }
 
+// HandleSendContractRequest broadcasts a newly created contract to all connected peers.
+// This ensures that new contracts are propagated throughout the network to be included in a future block.
 func HandleSendContractRequest(node host.Host, contract *blockchain.Contract) {
 	peers := node.Peerstore().Peers()
 	for _, peerID := range peers {
 		if peerID == node.ID() {
-			continue // Skip self
+			continue
 		}
 
-		// Check if peer is actually connected
 		if node.Network().Connectedness(peerID) != network.Connected {
 			log.Printf("[NETWORK] Skipping disconnected peer %s", peerID)
 			continue
@@ -234,7 +246,6 @@ func HandleSendContractRequest(node host.Host, contract *blockchain.Contract) {
 			log.Printf("[NETWORK] Error marshaling contract data to %s: %v", peerID, err)
 			continue
 		} else {
-			// Send length-prefixed contract data
 			writer := bufio.NewWriter(stream)
 			lenBuf := make([]byte, 4)
 			binary.BigEndian.PutUint32(lenBuf, uint32(len(data)))
@@ -258,10 +269,11 @@ func HandleSendContractRequest(node host.Host, contract *blockchain.Contract) {
 	}
 }
 
+// HandleReceiveContractRequest processes an incoming contract from a peer. The contract is
+// mined into a new block, and the new block is then broadcast to the network.
 func HandleReceiveContractRequest(h host.Host, s network.Stream, chain *blockchain.BlockChain) {
 	defer s.Close()
 
-	// Read length-prefixed contract data
 	reader := bufio.NewReader(s)
 	lenBuf := make([]byte, 4)
 	_, err := io.ReadFull(reader, lenBuf)
@@ -286,7 +298,6 @@ func HandleReceiveContractRequest(h host.Host, s network.Stream, chain *blockcha
 
 	log.Printf("[NETWORK] Received new contract ID %x from peer %s", contract.Id, s.Conn().RemotePeer())
 
-	// Add contract to blockchain
 	ct := &blockchain.Contract{
 		ID:             contract.Id,
 		Title:          contract.Title,
@@ -330,14 +341,14 @@ func HandleReceiveContractRequest(h host.Host, s network.Stream, chain *blockcha
 	block := chain.MineBlock(nil, []*blockchain.Contract{ct})
 	log.Printf("[NETWORK] New contract ID %x included in block %x", contract.Id, block.Hash)
 
-	// Broadcast new block to all peers using dedicated function
 	BroadcastBlock(h, block)
 }
 
+// HandleReceiveNewBlockRequest processes an incoming block from a peer. It validates the
+// block and, if valid, adds it to the local blockchain.
 func HandleReceiveNewBlockRequest(h host.Host, s network.Stream, chain *blockchain.BlockChain) {
 	defer s.Close()
 
-	// Read length-prefixed block data
 	reader := bufio.NewReader(s)
 	lenBuf := make([]byte, 4)
 	_, err := io.ReadFull(reader, lenBuf)
@@ -366,7 +377,6 @@ func HandleReceiveNewBlockRequest(h host.Host, s network.Stream, chain *blockcha
 		return
 	}
 
-	// Add block to blockchain
 	if err := chain.AddBlock(block); err != nil {
 		log.Printf("[NETWORK] Error adding new block %x: %v", block.Hash, err)
 		return

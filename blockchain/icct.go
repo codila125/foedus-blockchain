@@ -8,32 +8,35 @@ import (
 	"github.com/cockroachdb/pebble"
 )
 
-var ICCTPrefix = []byte("icct-") // Prefix for Incomplete Contract Tracking entries in the database
+// ICCTPrefix is the key prefix used for storing incomplete contract entries in the database.
+var ICCTPrefix = []byte("icct-")
 
+// ICCTSet manages the set of incomplete contracts for efficient tracking and lookup.
 type ICCTSet struct {
-	Blockchain *BlockChain // Reference to the blockchain
+	Blockchain *BlockChain
 }
 
-// ContractState wraps a contract with its milestones for storage
+// ContractState wraps a contract with its milestones for efficient storage and retrieval.
 type ContractState struct {
 	Contract   *Contract
 	Milestones []*Milestone
 }
 
+// FindICCT scans the entire blockchain to build a map of all incomplete contracts.
+// It iterates through each block and, for each contract, records its latest state.
+// A contract is considered incomplete if its status is 'ContractDraft' or 'ContractActive'.
+// If a contract transitions to a completed or cancelled state, it is removed from the map.
+// The resulting map provides a point-in-time snapshot of all active and pending contracts.
 func (blockchain *BlockChain) FindICCT() map[string]ContractState {
-	/*
-		Scans the entire blockchain to find all incomplete contracts.
-		Returns a map where the key is the contract ID and the value is the latest contract state.
-	*/
-	ICCT := make(map[string]ContractState) // ICCT map to hold incomplete contracts
+	ICCT := make(map[string]ContractState)
 
-	iterator := blockchain.Iterator() // Create an iterator to traverse the blockchain
+	iterator := blockchain.Iterator()
 
 	for {
-		block := iterator.Next() // Get the next block
+		block := iterator.Next()
 
-		for _, ct := range block.Contracts { // Iterate over each contract in the block
-			ctID := hex.EncodeToString(ct.ID) // Encode contract ID to string
+		for _, ct := range block.Contracts {
+			ctID := hex.EncodeToString(ct.ID)
 
 			// Always update with the latest version of the contract
 			state := ContractState{
@@ -41,16 +44,13 @@ func (blockchain *BlockChain) FindICCT() map[string]ContractState {
 				Milestones: ct.Milestones,
 			}
 
-			// Only track incomplete contracts (DRAFT or ACTIVE)
 			if ct.Status == ContractDraft || ct.Status == ContractActive {
 				ICCT[ctID] = state
 			} else {
-				// Remove completed or cancelled contracts
 				delete(ICCT, ctID)
 			}
 		}
 
-		// If we've reached the genesis block, stop iterating
 		if len(block.PrevHash) == 0 {
 			break
 		}
@@ -58,28 +58,27 @@ func (blockchain *BlockChain) FindICCT() map[string]ContractState {
 	return ICCT
 }
 
+// Reindex clears and rebuilds the Incomplete Contract (ICCT) set from the blockchain.
+// This function first deletes all existing ICCT entries and then repopulates the set
+// by scanning the entire blockchain, ensuring the index is perfectly synchronized with
+// the chain's history.
 func (i *ICCTSet) Reindex() {
-	/*
-		Rebuilds the ICCT set into the database from scratch
-		by deleting the previous ICCT set and scanning the entire
-		blockchain to find all incomplete contracts.
-	*/
 	log.Printf("[ICCT] Starting ICCT set reindexing")
 
-	db := i.Blockchain.Database.GetRawDB() // Get the database from the blockchain
+	db := i.Blockchain.Database.GetRawDB()
 
-	i.DeleteByPrefix(ICCTPrefix) // Delete existing ICCT entries with the specified prefix
+	i.DeleteByPrefix(ICCTPrefix)
 
-	ICCTs := i.Blockchain.FindICCT() // Find all incomplete contracts in the blockchain
+	ICCTs := i.Blockchain.FindICCT()
 
 	batch := db.NewBatch()
 
-	for ctID, state := range ICCTs { // Iterate over each contract ID and its state
+	for ctID, state := range ICCTs {
 		key, err := hex.DecodeString(ctID)
 		if err != nil {
 			log.Panic(err)
 		}
-		key = append(ICCTPrefix, key...) // Prefix the key with "icct-"
+		key = append(ICCTPrefix, key...)
 
 		err = batch.Set(key, state.SerializeContractState(), nil)
 		Handle(err)
@@ -93,12 +92,12 @@ func (i *ICCTSet) Reindex() {
 	log.Printf("[ICCT] ICCT set reindexed successfully - %d incomplete contract(s) in set", count)
 }
 
+// Update processes a new block and applies its contract-related changes to the ICCT set.
+// It iterates through the contracts in the block:
+// - If a contract's status is 'ContractDraft' or 'ContractActive', it is added or updated in the set.
+// - If a contract's status is terminal (e.g., 'Completed', 'Cancelled'), it is removed from the set.
+// This keeps the ICCT set consistent with the latest state of the blockchain.
 func (i *ICCTSet) Update(block *Block) {
-	/*
-		Updates the ICCT set with the contracts from the given block.
-		Adds new incomplete contracts and updates existing ones with their latest state.
-		Removes completed or cancelled contracts from the set.
-	*/
 	log.Printf("[ICCT] Updating ICCT set with block %x", block.Hash)
 	db := i.Blockchain.Database.GetRawDB()
 
@@ -139,10 +138,10 @@ func (i *ICCTSet) Update(block *Block) {
 	log.Printf("[ICCT] ICCT set updated successfully")
 }
 
+// DeleteByPrefix removes all database entries that match the given key prefix.
+// The deletion is performed in batches to manage memory usage and avoid creating a single,
+// excessively large database transaction, which could impact performance.
 func (i *ICCTSet) DeleteByPrefix(prefix []byte) {
-	/*
-		Delete all ICCT entries with the given prefix in chunks
-	*/
 	db := i.Blockchain.Database.GetRawDB()
 
 	iter, _ := db.NewIter(&pebble.IterOptions{})
@@ -204,15 +203,12 @@ func (i *ICCTSet) DeleteByPrefix(prefix []byte) {
 	}
 }
 
+// CountContracts iterates through the database and returns the total number of entries
+// in the ICCT set, effectively counting all incomplete contracts.
 func (i ICCTSet) CountContracts() int {
-	/*
-		Counts the number of incomplete contracts in the ICCT set.
-		Returns the count as an integer.
-	*/
 	db := i.Blockchain.Database.GetRawDB()
 	count := 0
 
-	// Create iterator for prefix scan
 	iter, _ := db.NewIter(&pebble.IterOptions{})
 	defer func() {
 		_ = iter.Close()
@@ -229,11 +225,10 @@ func (i ICCTSet) CountContracts() int {
 	return count
 }
 
+// GetContract retrieves the latest state of a specific contract from the ICCT set using its ID.
+// It returns the deserialized contract if found, or an error if the contract does not exist
+// in the set or if a database error occurs.
 func (i ICCTSet) GetContract(contractID []byte) (*Contract, error) {
-	/*
-		Retrieves the latest state of a contract from the ICCT set.
-		Returns the contract and nil error if found, otherwise returns an error.
-	*/
 	db := i.Blockchain.Database.GetRawDB()
 	key := append(ICCTPrefix, contractID...)
 

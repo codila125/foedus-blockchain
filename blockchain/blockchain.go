@@ -1,3 +1,7 @@
+// Package blockchain provides the core implementation of the Foedus blockchain,
+// including its data structures, creation, and maintenance. It manages the
+// chain of blocks, their persistence in a database, and the consensus mechanisms
+// that ensure the integrity and security of the ledger.
 package blockchain
 
 import (
@@ -12,30 +16,39 @@ import (
 )
 
 const (
-	DBPath      = "./temp/blocks_%s"
+	// DBPath defines the directory pattern for storing blockchain data. Each node
+	// has its own subdirectory, identified by a unique node ID.
+	DBPath = "./temp/blocks_%s"
+	// genesisData is a constant string embedded in the coinbase transaction of the
+	// genesis block, marking the beginning of the blockchain.
 	genesisData = "Genesis Foedus"
-	LastHashKey = "lh" // Key to store the last block hash
+	// LastHashKey is the database key used to store the hash of the most recent
+	// block in the chain. This allows for quick access to the tip of the blockchain.
+	LastHashKey = "lh"
 )
 
+// BlockChain represents the full blockchain. It holds a reference to the hash of
+// the latest block and the database connection where the blocks are stored.
 type BlockChain struct {
-	LastHash []byte             // Hash of the last block in the chain
-	Database *database.PebbleDB // Reference to the PebbleDB database
+	LastHash []byte             // The hash of the most recent block in the chain.
+	Database *database.PebbleDB // The underlying database for persistent storage.
 }
 
+// BlockChainIterator provides a mechanism to traverse the blockchain from the
+// newest block to the oldest. It maintains the hash of the current block being
+// examined.
 type BlockChainIterator struct {
-	CurrentHash []byte             // Hash of the current block in the iteration
-	Database    *database.PebbleDB // Reference to the PebbleDB database
+	CurrentHash []byte             // The hash of the current block in the iteration.
+	Database    *database.PebbleDB // A reference to the blockchain's database.
 }
 
+// NewBlockChain creates and initializes a new blockchain for a specific node.
+// If a blockchain already exists at the specified path, the function will exit.
+// Otherwise, it creates a genesis block, stores it in the database, and sets it
+// as the first and last block of the chain.
 func NewBlockChain(address string, nodeID string) *BlockChain {
-	/*
-		Creates a new blockchain with a genesis block and stores it in the database.
-		'address' is the address to send the coinbase reward to.
-		Returns a pointer to the newly created BlockChain instance.
-	*/
 	var lastHash []byte
 
-	// Ensure a blockchain does not already exist
 	path := fmt.Sprintf(DBPath, nodeID)
 	if database.DBExists(path) {
 		log.Printf("[BLOCKCHAIN] Blockchain already exists for node %s", nodeID)
@@ -57,17 +70,16 @@ func NewBlockChain(address string, nodeID string) *BlockChain {
 		_ = batch.Close()
 	}()
 
-	// Create the genesis block and store it in the database
-	cbtx := CoinbaseTx(address, genesisData) // Create the coinbase transaction for the genesis block
-	cbct := CoinbaseOp(address, genesisData) // Create the coinbase contract for the genesis block
-	genesis := Genesis(cbtx, cbct)           // Create the genesis block
+	cbtx := CoinbaseTx(address, genesisData)
+	cbct := CoinbaseOp(address, genesisData)
+	genesis := Genesis(cbtx, cbct)
 	log.Printf("[BLOCKCHAIN] Genesis block created - Hash: %x", genesis.Hash)
 
-	err = batch.Set(genesis.Hash, genesis.SerializeBlock(), nil) // Store the genesis block in the database
+	err = batch.Set(genesis.Hash, genesis.SerializeBlock(), nil)
 	Handle(err)
-	err = batch.Set([]byte(LastHashKey), genesis.Hash, nil) // Store the last hash pointer because it helps to find the last block
+	err = batch.Set([]byte(LastHashKey), genesis.Hash, nil)
 	Handle(err)
-	lastHash = genesis.Hash // Set the last hash to the genesis block's hash
+	lastHash = genesis.Hash
 
 	err = rawDB.Apply(batch, &pebble.WriteOptions{Sync: true})
 	Handle(err)
@@ -77,11 +89,10 @@ func NewBlockChain(address string, nodeID string) *BlockChain {
 	return &blockchain
 }
 
+// ContinueBlockChain loads an existing blockchain from the database for a given node.
+// It retrieves the hash of the last block to set the current tip of the chain.
+// If no blockchain is found, the application exits.
 func ContinueBlockChain(nodeID string) *BlockChain {
-	/*
-		Continues an existing blockchain by loading it from the database.
-		Returns a pointer to the BlockChain instance.
-	*/
 	path := fmt.Sprintf(DBPath, nodeID)
 	if !database.DBExists(path) {
 		log.Printf("[BLOCKCHAIN] No existing blockchain found for node %s", nodeID)
@@ -95,7 +106,6 @@ func ContinueBlockChain(nodeID string) *BlockChain {
 	db, err := database.OpenDB(path)
 	Handle(err)
 
-	// Read the last hash from the database
 	lastHashBytes, err := db.Get([]byte(LastHashKey))
 	if err == nil {
 		lastHash = make([]byte, len(lastHashBytes))
@@ -109,12 +119,11 @@ func ContinueBlockChain(nodeID string) *BlockChain {
 	return &blockchain
 }
 
+// MineBlock adds a new block to the blockchain. It validates all transactions
+// and contracts, performs the Proof-of-Work to find a valid hash, and then adds
+// the new block to the database. It also updates the UTXO and ICCT sets to reflect
+// the new state.
 func (blockchain *BlockChain) MineBlock(transactions []*Transaction, contracts []*Contract) *Block {
-	/*
-		Adds a new block with the given transactions and contracts to the blockchain.
-		'transactions' is a slice of pointers to Transaction instances to be included in the new block.
-		Returns a pointer to the newly added Block instance.
-	*/
 	var lastHash []byte
 	var lastHeight int
 
@@ -140,7 +149,6 @@ func (blockchain *BlockChain) MineBlock(transactions []*Transaction, contracts [
 
 	db := blockchain.Database.GetRawDB()
 
-	// Get the last hash from the database
 	lastHashBytes, closer, err := db.Get([]byte(LastHashKey))
 	if err != nil {
 		log.Panicf("[BLOCKCHAIN] Failed to retrieve last hash: %v", err)
@@ -159,9 +167,8 @@ func (blockchain *BlockChain) MineBlock(transactions []*Transaction, contracts [
 
 	lastBlock := DeserializeBlock(blockDataCopy)
 	lastHeight = lastBlock.Height
-	newBlock := CreateBlock(transactions, contracts, lastHash, lastHeight+1) // Create a new block with the transactions and previous hash
+	newBlock := CreateBlock(transactions, contracts, lastHash, lastHeight+1)
 
-	// Store the new block in the database and update the last hash pointer
 	batch := db.NewBatch()
 	defer func() {
 		_ = batch.Close()
@@ -191,12 +198,11 @@ func (blockchain *BlockChain) MineBlock(transactions []*Transaction, contracts [
 	return newBlock
 }
 
+// AddBlock incorporates a new block into the blockchain, typically received from
+// another node in the network. It validates the block and, if it is valid and
+// extends the longest chain, updates the blockchain's tip. The UTXO and ICCT sets
+// are also updated accordingly.
 func (blockchain *BlockChain) AddBlock(block *Block) error {
-	/*
-		Adds a block to the blockchain if it does not already exist.
-		'block' is a pointer to the Block instance to be added.
-		Returns an error if any operation fails, otherwise returns nil.
-	*/
 
 	db := blockchain.Database.GetRawDB()
 	batch := db.NewBatch()
@@ -207,10 +213,9 @@ func (blockchain *BlockChain) AddBlock(block *Block) error {
 	_, closer, err := db.Get(block.Hash)
 	if err == nil {
 		_ = closer.Close()
-		return nil // Block already exists
+		return nil
 	}
 
-	// Store block in database
 	err = batch.Set(block.Hash, block.SerializeBlock(), nil)
 	if err != nil {
 		return err
@@ -238,7 +243,6 @@ func (blockchain *BlockChain) AddBlock(block *Block) error {
 		return fmt.Errorf("could not deserialize last block")
 	}
 
-	// Update the last hash only if the new block's height is greater
 	if block.Height > lastBlock.Height {
 		err = batch.Set([]byte(LastHashKey), block.Hash, nil)
 		if err != nil {
@@ -253,7 +257,6 @@ func (blockchain *BlockChain) AddBlock(block *Block) error {
 	err = db.Apply(batch, &pebble.WriteOptions{Sync: true})
 	Handle(err)
 
-	// Update UTXO set and ICCT set for received blocks
 	utxoSet := UTXOSet{blockchain}
 	utxoSet.Update(block)
 
@@ -263,12 +266,10 @@ func (blockchain *BlockChain) AddBlock(block *Block) error {
 	return nil
 }
 
+// GetBlock retrieves a specific block from the blockchain using its hash.
+// It reads the block's data from the database and deserializes it into a
+// Block struct.
 func (blockchain *BlockChain) GetBlock(blockHash []byte) (Block, error) {
-	/*
-		Retrieves a block from the blockchain by its hash.
-		'blockHash' is the hash of the block to be retrieved.
-		Returns the Block instance if found, otherwise returns an error.
-	*/
 	var block Block
 
 	db := blockchain.Database.GetRawDB()
@@ -285,13 +286,11 @@ func (blockchain *BlockChain) GetBlock(blockHash []byte) (Block, error) {
 	return block, nil
 }
 
+// GetBlockHashes returns a list of all block hashes in the blockchain, starting
+// from the most recent block and traversing back to the genesis block.
 func (blockchain *BlockChain) GetBlockHashes() [][]byte {
-	/*
-		Retrieves all block hashes in the blockchain.
-		Returns a slice of byte slices, each representing a block hash.
-	*/
 	var blocks [][]byte
-	iterator := blockchain.Iterator() // Create an iterator to traverse the blockchain
+	iterator := blockchain.Iterator()
 
 	for {
 		block := iterator.Next()
@@ -303,10 +302,9 @@ func (blockchain *BlockChain) GetBlockHashes() [][]byte {
 	return blocks
 }
 
+// GetBestHeight returns the height of the latest block in the blockchain. This
+// is a key metric for understanding the current length and state of the chain.
 func (blockchain *BlockChain) GetBestHeight() int {
-	/*
-		Returns the height of the latest block in the blockchain.
-	*/
 	db := blockchain.Database.GetRawDB()
 
 	lastHash, closer, err := db.Get([]byte("lh"))

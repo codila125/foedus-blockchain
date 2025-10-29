@@ -1,4 +1,6 @@
-// Package server implements the gRPC server for the Foedus Blockchain.
+// Package server implements the core logic for the Foedus Blockchain's API server.
+// It handles requests for creating wallets, checking balances, managing smart
+// contracts, and interacting with the underlying blockchain and network layers.
 package server
 
 import (
@@ -13,12 +15,18 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 )
 
+// Server encapsulates the main components of the blockchain API server, including
+// the port it runs on, the network host for P2P communication, and the blockchain
+// instance it serves.
 type Server struct {
 	port       string
 	sourceNode host.Host
 	chain      *blockchain.BlockChain
 }
 
+// NewServer creates and initializes a new API server instance. It continues an
+// existing blockchain from the specified port's data directory and sets up the
+// P2P network node.
 func NewServer(port string) *Server {
 	chain := blockchain.ContinueBlockChain(port)
 	sourceNode := network.RunSourceNode(chain, port)
@@ -29,6 +37,9 @@ func NewServer(port string) *Server {
 	}
 }
 
+// CreateWallet generates a new wallet, saves it to the node's wallet file, and
+// returns the new wallet's address. It ensures that the wallet is persisted
+// before confirming its creation.
 func (s *Server) CreateWallet(ctx context.Context) (string, error) {
 	wallets, _ := wallet.CreateWallets(s.port)
 	address := wallets.AddWallet()
@@ -42,6 +53,8 @@ func (s *Server) CreateWallet(ctx context.Context) (string, error) {
 	return address, nil
 }
 
+// ListAddresses retrieves and returns all wallet addresses managed by the server's
+// node. It loads the wallets from the file and returns a slice of address strings.
 func (s *Server) ListAddresses(ctx context.Context) ([]string, error) {
 	wallets, err := wallet.CreateWallets(s.port)
 	if err != nil {
@@ -54,6 +67,8 @@ func (s *Server) ListAddresses(ctx context.Context) ([]string, error) {
 	return addresses, nil
 }
 
+// PrintChain returns a complete, chronologically ordered representation of the
+// blockchain, from the most recent block to the genesis block.
 func (s *Server) PrintChain(ctx context.Context) []*BlockRes {
 	iterator := s.chain.Iterator()
 
@@ -70,6 +85,8 @@ func (s *Server) PrintChain(ctx context.Context) []*BlockRes {
 	return blocks
 }
 
+// GetBalance calculates and returns the total balance for a given wallet address
+// by summing up the values of all unspent transaction outputs (UTXOs) owned by that address.
 func (s *Server) GetBalance(ctx context.Context, address string) (int, error) {
 	UTXOSet := blockchain.UTXOSet{Blockchain: s.chain}
 
@@ -87,9 +104,10 @@ func (s *Server) GetBalance(ctx context.Context, address string) (int, error) {
 	return balance, nil
 }
 
+// CreateContract facilitates the creation of a new smart contract. It constructs
+// the contract with the provided parties, milestones, and terms, and then
+// broadcasts it to the network for other nodes to process.
 func (s *Server) CreateContract(ctx context.Context, req CreateContractReq) (string, error) {
-	// Implementation for creating a contract goes here
-	log.Printf("[SERVER] Creating contract: %s", req.Title)
 
 	wallets, err := wallet.CreateWallets(s.port)
 	if err != nil {
@@ -146,8 +164,9 @@ func (s *Server) CreateContract(ctx context.Context, req CreateContractReq) (str
 	return hex.EncodeToString(contract.ID), nil
 }
 
+// ApproveContract handles the approval of a smart contract. It adds the approver's
+// signature to the contract and then broadcasts the updated contract to the network.
 func (s *Server) ApproveContract(ctx context.Context, contractID string, approverAddress string) error {
-	// Implementation for approving a contract goes here
 	log.Printf("[SERVER] Approving contract ID: %s by approver: %s", contractID, approverAddress)
 
 	wallets, err := wallet.CreateWallets(s.port)
@@ -175,8 +194,10 @@ func (s *Server) ApproveContract(ctx context.Context, contractID string, approve
 	return nil
 }
 
+// ApproveMilestone manages the approval of a contract's milestone. It records the
+// approval with the provided evidence, updates the milestone's status, and
+// broadcasts the modified contract to the network.
 func (s *Server) ApproveMilestone(ctx context.Context, contractID string, milestoneID string, approverAddress string, evidence []byte) error {
-	// Implementation for approving a milestone goes here
 	log.Printf("[SERVER] Approving milestone ID: %s in contract ID: %s by approver: %s", milestoneID, contractID, approverAddress)
 
 	wallets, err := wallet.CreateWallets(s.port)
@@ -209,8 +230,9 @@ func (s *Server) ApproveMilestone(ctx context.Context, contractID string, milest
 	return nil
 }
 
+// ContractStatus retrieves and returns the current state of a smart contract,
+// identified by its ID.
 func (s *Server) ContractStatus(ctx context.Context, contractID string) (ContractRes, error) {
-	// Implementation for retrieving contract status goes here
 	log.Printf("[SERVER] Retrieving status for contract ID: %s", contractID)
 
 	contract, err := s.chain.FindContract(contractID)
@@ -223,7 +245,9 @@ func (s *Server) ContractStatus(ctx context.Context, contractID string) (Contrac
 	return ContractResponse(contract), nil
 }
 
-// Close gracefully closes the database and associated resources
+// Close gracefully shuts down the server's resources, including the blockchain's
+// database connection. It uses a context with a timeout to prevent the shutdown
+// process from hanging.
 func (s *Server) Close(ctx context.Context) error {
 	log.Println("[SERVER] Closing server resources...")
 
@@ -237,7 +261,6 @@ func (s *Server) Close(ctx context.Context) error {
 		return nil
 	}
 
-	// Close database with timeout
 	dbCloseDone := make(chan error, 1)
 	go func() {
 		dbCloseDone <- s.chain.Database.Close()

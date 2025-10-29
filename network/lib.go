@@ -1,4 +1,5 @@
-// Package network handles peer-to-peer networking for the Foedus blockchain
+// Package network handles peer-to-peer networking for the Foedus blockchain,
+// including block synchronization, broadcasting, and peer management.
 package network
 
 import (
@@ -20,14 +21,17 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// protocolID is the unique identifier for the Foedus blockchain protocol.
 const protocolID = "/foedus/1.0.0"
 
-// PrintNodeID logs the node's unique identifier
+// PrintNodeID logs the unique identifier (Peer ID) of the libp2p node.
+// This is useful for debugging and identifying the node on the network.
 func PrintNodeID(host host.Host) {
 	log.Printf("[NETWORK] Node ID: %s", host.ID().String())
 }
 
-// PrintNodeAddresses logs all listening addresses for the node
+// PrintNodeAddresses logs all multiaddresses the node is listening on.
+// These addresses can be used by other peers to connect to this node.
 func PrintNodeAddresses(host host.Host) {
 	addressesString := make([]string, 0)
 	for _, address := range host.Addrs() {
@@ -36,7 +40,8 @@ func PrintNodeAddresses(host host.Host) {
 	log.Printf("[NETWORK] Node addresses: %s", strings.Join(addressesString, ", "))
 }
 
-// CreateStream establishes a new stream to a peer with the given protocol
+// CreateStream establishes a new bidirectional stream to a peer using a specific protocol.
+// It returns the stream handle or an error if the stream could not be established.
 func CreateStream(node host.Host, peerID peerstore.ID, protocolID protocolpkg.ID) (network.Stream, error) {
 	stream, err := node.NewStream(context.Background(), peerID, protocolID)
 	if err != nil {
@@ -45,7 +50,8 @@ func CreateStream(node host.Host, peerID peerstore.ID, protocolID protocolpkg.ID
 	return stream, nil
 }
 
-// SendCommand sends a command string over a stream
+// SendCommand sends a command as a simple string over a network stream.
+// It returns an error if the write operation fails.
 func SendCommand(stream network.Stream, command string) error {
 	if _, err := stream.Write([]byte(command)); err != nil {
 		return fmt.Errorf("failed to send command: %w", err)
@@ -53,7 +59,9 @@ func SendCommand(stream network.Stream, command string) error {
 	return nil
 }
 
-// ReceiveBlocks decodes and processes blocks from a stream
+// ReceiveBlocks reads length-prefixed block messages from a stream, deserializes them,
+// and processes them using a callback. It returns the number of blocks received,
+// the hash of the last block, the maximum height, and any error encountered.
 func ReceiveBlocks(stream network.Stream, processBlock func([]byte, *blockchain.Block) error) (int, []byte, int, error) {
 	var blockCount int
 	var lastHash []byte
@@ -62,7 +70,6 @@ func ReceiveBlocks(stream network.Stream, processBlock func([]byte, *blockchain.
 	reader := bufio.NewReader(stream)
 
 	for {
-		// Read length prefix (4 bytes, big-endian)
 		lenBuf := make([]byte, 4)
 		_, err := io.ReadFull(reader, lenBuf)
 		if err != nil {
@@ -74,7 +81,6 @@ func ReceiveBlocks(stream network.Stream, processBlock func([]byte, *blockchain.
 
 		messageLen := binary.BigEndian.Uint32(lenBuf)
 
-		// Read the actual message
 		buf := make([]byte, messageLen)
 		_, err = io.ReadFull(reader, buf)
 		if err != nil {
@@ -89,12 +95,10 @@ func ReceiveBlocks(stream network.Stream, processBlock func([]byte, *blockchain.
 			return blockCount, lastHash, maxHeight, fmt.Errorf("failed to decode block: %w", err)
 		}
 
-		// Check for completion signal
 		if cmd := blockDataProto.Command; cmd == "done" {
 			break
 		}
 
-		// Extract block
 		serializedBlock := blockDataProto.Data
 		if serializedBlock == nil {
 			log.Printf("[NETWORK] Invalid block data format, skipping")
@@ -107,12 +111,10 @@ func ReceiveBlocks(stream network.Stream, processBlock func([]byte, *blockchain.
 			continue
 		}
 
-		// Process block using callback
 		if err := processBlock(serializedBlock, block); err != nil {
 			return blockCount, lastHash, maxHeight, err
 		}
 
-		// Track the latest block (since blocks are sent in chronological order)
 		if block.Height >= maxHeight {
 			maxHeight = block.Height
 			lastHash = block.Hash
@@ -128,7 +130,9 @@ func ReceiveBlocks(stream network.Stream, processBlock func([]byte, *blockchain.
 	return blockCount, lastHash, maxHeight, nil
 }
 
-// SendBlocks encodes and sends blocks over an existing stream
+// SendBlocks serializes and sends a list of blocks over a network stream.
+// Each block is retrieved using a callback and sent as a length-prefixed protobuf message.
+// It sends a "done" signal after all blocks have been sent.
 func SendBlocks(stream network.Stream, blockHashes [][]byte, getBlock func([]byte) (blockchain.Block, error)) error {
 	writer := bufio.NewWriter(stream)
 
@@ -151,7 +155,6 @@ func SendBlocks(stream network.Stream, blockHashes [][]byte, getBlock func([]byt
 			return fmt.Errorf("failed to marshal block: %w", err)
 		}
 
-		// Send length-prefixed block data
 		lenBuf := make([]byte, 4)
 		binary.BigEndian.PutUint32(lenBuf, uint32(len(data)))
 		if _, err := writer.Write(lenBuf); err != nil {
@@ -163,7 +166,6 @@ func SendBlocks(stream network.Stream, blockHashes [][]byte, getBlock func([]byt
 		}
 	}
 
-	// Send completion signal
 	doneData := &protobuf.BlockData{
 		Command: "done",
 	}
@@ -190,10 +192,12 @@ func SendBlocks(stream network.Stream, blockHashes [][]byte, getBlock func([]byt
 	return nil
 }
 
+// GetBlockchain requests and downloads the entire blockchain from a specified peer.
+// This is typically used for initial synchronization when a node has no local blockchain.
+// It stores the received blocks in the database.
 func GetBlockchain(node host.Host, peerID peerstore.ID, nodeID string) error {
 	log.Printf("[NETWORK] Requesting blockchain from peer: %s", peerID)
 
-	// Create stream and send request
 	stream, err := CreateStream(node, peerID, protocolID)
 	if err != nil {
 		return err
@@ -204,30 +208,25 @@ func GetBlockchain(node host.Host, peerID peerstore.ID, nodeID string) error {
 		return err
 	}
 
-	// Check if database already exists
 	path := fmt.Sprintf(blockchain.DBPath, nodeID)
 	if database.DBExists(path) {
 		log.Printf("[DATABASE] Database already exists, skipping sync")
 		return nil
 	}
 
-	// Open database
 	db, err := database.OpenDB(path)
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
 	defer db.Close()
 
-	// Initialize batch writer
 	batchWriter := database.NewBatchWriter(db.GetRawDB(), 100)
 	defer batchWriter.Close(false)
 
-	// Process blocks callback
 	processBlock := func(serializedBlock []byte, block *blockchain.Block) error {
 		return batchWriter.Write(block.Hash, serializedBlock)
 	}
 
-	// Receive and store blocks
 	blockCount, lastHash, maxHeight, err := ReceiveBlocks(stream, processBlock)
 	if err != nil {
 		return err
@@ -237,12 +236,10 @@ func GetBlockchain(node host.Host, peerID peerstore.ID, nodeID string) error {
 		return fmt.Errorf("no blocks received from peer")
 	}
 
-	// Store last hash
 	if err := batchWriter.Write([]byte(blockchain.LastHashKey), lastHash); err != nil {
 		return err
 	}
 
-	// Final sync flush
 	if err := batchWriter.Close(true); err != nil {
 		return err
 	}
@@ -251,21 +248,21 @@ func GetBlockchain(node host.Host, peerID peerstore.ID, nodeID string) error {
 	return nil
 }
 
-// VersionInfo represents the blockchain version information
+// VersionInfo encapsulates a peer's blockchain height, last block hash, and node ID.
 type VersionInfo struct {
-	BestHeight int    // Height of the latest block
-	LastHash   []byte // Hash of the latest block
-	NodeID     string // Identifier of the node
+	BestHeight int
+	LastHash   []byte
+	NodeID     string
 }
 
-// RequestVersionFromPeers requests blockchain version from all connected peers
+// RequestVersionFromPeers queries all connected peers for their blockchain version information.
+// It returns a map of peer IDs to their respective VersionInfo.
 func RequestVersionFromPeers(node host.Host, chain *blockchain.BlockChain) map[peerstore.ID]VersionInfo {
 	peers := node.Peerstore().Peers()
 	versions := make(map[peerstore.ID]VersionInfo)
 
 	localHeight := chain.GetBestHeight()
 
-	// Count only connected peers
 	connectedPeers := 0
 	for _, peerID := range peers {
 		if peerID != node.ID() && node.Network().Connectedness(peerID) == network.Connected {
@@ -277,10 +274,9 @@ func RequestVersionFromPeers(node host.Host, chain *blockchain.BlockChain) map[p
 
 	for _, peerID := range peers {
 		if peerID == node.ID() {
-			continue // Skip self
+			continue
 		}
 
-		// Check if peer is actually connected
 		if node.Network().Connectedness(peerID) != network.Connected {
 			log.Printf("[NETWORK] Skipping disconnected peer %s", peerID)
 			continue
@@ -298,7 +294,6 @@ func RequestVersionFromPeers(node host.Host, chain *blockchain.BlockChain) map[p
 			continue
 		}
 
-		// Receive version response with length prefix
 		reader := bufio.NewReader(stream)
 		lenBuf := make([]byte, 4)
 		_, err = io.ReadFull(reader, lenBuf)
@@ -339,7 +334,8 @@ func RequestVersionFromPeers(node host.Host, chain *blockchain.BlockChain) map[p
 	return versions
 }
 
-// SyncToLatestBlockchain syncs the local blockchain with the peer that has the longest chain
+// SyncToLatestBlockchain identifies the peer with the highest blockchain and synchronizes with it.
+// If the local blockchain is already up-to-date, it does nothing.
 func SyncToLatestBlockchain(node host.Host, chain *blockchain.BlockChain, nodeID string) error {
 	localHeight := chain.GetBestHeight()
 	versions := RequestVersionFromPeers(node, chain)
@@ -349,7 +345,6 @@ func SyncToLatestBlockchain(node host.Host, chain *blockchain.BlockChain, nodeID
 		return fmt.Errorf("no peers available")
 	}
 
-	// Find peer with the longest chain
 	var bestPeerID peerstore.ID
 	var bestVersion VersionInfo
 	maxHeight := localHeight
@@ -371,7 +366,6 @@ func SyncToLatestBlockchain(node host.Host, chain *blockchain.BlockChain, nodeID
 		bestPeerID, bestVersion.BestHeight, localHeight)
 	log.Printf("[NETWORK] Starting synchronization from peer %s...", bestPeerID)
 
-	// Sync missing blocks from the best peer
 	if err := SyncMissingBlocks(node, bestPeerID, chain); err != nil {
 		return fmt.Errorf("failed to sync blockchain from peer %s: %w", bestPeerID, err)
 	}
@@ -380,24 +374,22 @@ func SyncToLatestBlockchain(node host.Host, chain *blockchain.BlockChain, nodeID
 	return nil
 }
 
-// SyncMissingBlocks requests and adds missing blocks from a peer to the existing blockchain
+// SyncMissingBlocks requests and adds blocks from a peer that are missing from the local blockchain.
+// It starts requesting blocks after the current best height of the local chain.
 func SyncMissingBlocks(node host.Host, peerID peerstore.ID, chain *blockchain.BlockChain) error {
 	localHeight := chain.GetBestHeight()
 	log.Printf("[NETWORK] Requesting blocks after height %d from peer: %s", localHeight, peerID)
 
-	// Create stream and send request
 	stream, err := CreateStream(node, peerID, protocolID)
 	if err != nil {
 		return err
 	}
 	defer stream.Close()
 
-	// Send command with local height
 	if err := SendCommand(stream, "GET_BLOCKS"); err != nil {
 		return err
 	}
 
-	// Send our current height so peer knows what to send
 	heightData := &protobuf.HeightData{
 		Height: int32(localHeight),
 	}
@@ -407,7 +399,6 @@ func SyncMissingBlocks(node host.Host, peerID peerstore.ID, chain *blockchain.Bl
 		return fmt.Errorf("failed to marshal height data: %w", err)
 	}
 
-	// Send length-prefixed height data
 	writer := bufio.NewWriter(stream)
 	lenBuf := make([]byte, 4)
 	binary.BigEndian.PutUint32(lenBuf, uint32(len(protoData)))
@@ -423,12 +414,10 @@ func SyncMissingBlocks(node host.Host, peerID peerstore.ID, chain *blockchain.Bl
 		return fmt.Errorf("failed to flush height data: %w", err)
 	}
 
-	// Receive only missing blocks
 	var newBlocksAdded int
 	blockReader := bufio.NewReader(stream)
 
 	for {
-		// Read length prefix (4 bytes, big-endian)
 		lenBuf := make([]byte, 4)
 		_, err := io.ReadFull(blockReader, lenBuf)
 		if err != nil {
@@ -440,7 +429,6 @@ func SyncMissingBlocks(node host.Host, peerID peerstore.ID, chain *blockchain.Bl
 
 		messageLen := binary.BigEndian.Uint32(lenBuf)
 
-		// Read the actual block message
 		buf := make([]byte, messageLen)
 		_, err = io.ReadFull(blockReader, buf)
 		if err != nil {
@@ -455,7 +443,6 @@ func SyncMissingBlocks(node host.Host, peerID peerstore.ID, chain *blockchain.Bl
 			return fmt.Errorf("failed to decode block: %w", err)
 		}
 
-		// Check for completion signal
 		if cmd := blockDataProto.Command; cmd == "done" {
 			break
 		}
@@ -465,7 +452,6 @@ func SyncMissingBlocks(node host.Host, peerID peerstore.ID, chain *blockchain.Bl
 			continue
 		}
 
-		// Add block to chain
 		if err := chain.AddBlock(block); err != nil {
 			log.Printf("[NETWORK] Error adding block %x (height: %d): %v", block.Hash, block.Height, err)
 			continue
@@ -484,10 +470,11 @@ func SyncMissingBlocks(node host.Host, peerID peerstore.ID, chain *blockchain.Bl
 	return nil
 }
 
+// BroadcastBlock sends a newly mined block to all connected peers in the network.
+// This ensures that all nodes are aware of the latest block.
 func BroadcastBlock(node host.Host, block *blockchain.Block) {
 	peers := node.Peerstore().Peers()
 
-	// Count only connected peers
 	connectedPeers := 0
 	for _, peerID := range peers {
 		if peerID != node.ID() && node.Network().Connectedness(peerID) == network.Connected {
@@ -499,10 +486,9 @@ func BroadcastBlock(node host.Host, block *blockchain.Block) {
 
 	for _, peerID := range peers {
 		if peerID == node.ID() {
-			continue // Skip self
+			continue
 		}
 
-		// Check if peer is actually connected
 		if node.Network().Connectedness(peerID) != network.Connected {
 			log.Printf("[NETWORK] Skipping disconnected peer %s", peerID)
 			continue
@@ -520,7 +506,6 @@ func BroadcastBlock(node host.Host, block *blockchain.Block) {
 			continue
 		}
 
-		// Wrap block in BlockData protobuf message
 		blockDataProto := &protobuf.BlockData{
 			Command: "NEW_BLOCK",
 			Hash:    block.Hash,
@@ -534,7 +519,6 @@ func BroadcastBlock(node host.Host, block *blockchain.Block) {
 			continue
 		}
 
-		// Send length-prefixed block data
 		writer := bufio.NewWriter(stream)
 		lenBuf := make([]byte, 4)
 		binary.BigEndian.PutUint32(lenBuf, uint32(len(data)))

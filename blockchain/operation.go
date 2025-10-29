@@ -15,14 +15,13 @@ import (
 	"github.com/codila125/foedus-blockchain/wallet"
 )
 
+// CoinbaseOp creates a special "coinbase" contract, which represents the mining reward
+// for creating a new block. This contract has no parties or milestones and serves as the
+// foundational transaction in a genesis block or as a reward in subsequent blocks.
+// The 'data' field can be arbitrary but is typically used for miner-specific information.
 func CoinbaseOp(creator, data string) *Contract {
-	/*
-		Creates a coinbase contract that rewards the miner.
-		'creator' is the address to send the reward to.
-		'data' is arbitrary data, often used to include a message or extra information.
-	*/
 	if data == "" {
-		randData := make([]byte, 20) // Generate 20 random bytes
+		randData := make([]byte, 20)
 		_, err := rand.Read(randData)
 		if err != nil {
 			log.Panic(err)
@@ -48,31 +47,22 @@ func CoinbaseOp(creator, data string) *Contract {
 	return contract
 }
 
+// IsCoinbaseOp checks if a contract is a coinbase operation. A coinbase contract is
+// identified by its specific title and the absence of milestones and parties.
 func (contract *Contract) IsCoinbaseOp() bool {
-	/*
-		Checks if the contract is a coinbase contract.
-		Returns true if the contract has the title "Coinbase Foedus" and has no milestones or parties.
-	*/
 	return contract.Title == "Coinbase Foedus" && len(contract.Milestones) == 0 && len(contract.Parties) == 0
 }
 
+// FindContract searches the entire blockchain for a contract by its ID. It optimizes the
+// search by first checking the Incomplete Contract (ICCT) set for active contracts.
+// If not found, it performs a full scan of the blockchain history.
 func (blockchain *BlockChain) FindContract(contractID string) (Contract, error) {
-	/*
-	   Finds a contract in the blockchain by its ID.
-	   First checks the ICCT set for incomplete contracts (fast lookup),
-	   then falls back to blockchain scan if not found.
-	   contractID can be either hex string or raw bytes
-	   Returns the contract and nil error if found, otherwise returns an error.
-	*/
 
-	// Convert hex string to bytes for comparison
 	targetID, err := hex.DecodeString(contractID)
 	if err != nil {
-		// If it's not a valid hex string, treat it as raw bytes
 		targetID = []byte(contractID)
 	}
 
-	// First, try to find in ICCT set (fast lookup for incomplete contracts)
 	icctSet := ICCTSet{blockchain}
 	contract, err := icctSet.GetContract(targetID)
 	if err == nil && contract != nil {
@@ -80,7 +70,6 @@ func (blockchain *BlockChain) FindContract(contractID string) (Contract, error) 
 		return *contract, nil
 	}
 
-	// If not in ICCT, scan the entire blockchain (for completed/cancelled contracts)
 	log.Printf("[CONTRACT] Contract %x not in ICCT set, scanning blockchain", targetID)
 	iter := blockchain.Iterator()
 
@@ -101,32 +90,26 @@ func (blockchain *BlockChain) FindContract(contractID string) (Contract, error) 
 	return Contract{}, errors.New("Contract not found")
 }
 
+// SignContract generates a cryptographic signature for the contract using a party's private key.
+// This signature serves as proof of agreement from that party. The contract's hash is signed,
+// and the resulting signature is stored in the corresponding party's entry within the contract.
 func (contract *Contract) SignContract(privKey *ed25519.PrivateKey, partyAddress []byte) error {
-	/*
-	   Signs a contract using the provided private key.
-	   A party signs to indicate they agree to the contract terms.
-	   The signature is appended to the party's entry in the Parties list.
-	*/
 	if contract.IsCoinbaseOp() {
 		return nil
 	}
 
-	// Create a copy without existing signatures for hashing
 	ctCopy := *contract
 	ctCopy.Parties = make([]*Party, len(contract.Parties))
 	for i, party := range contract.Parties {
 		partyCopy := *party
-		partyCopy.Signature = nil // Clear signature for hashing
+		partyCopy.Signature = nil
 		ctCopy.Parties[i] = &partyCopy
 	}
 
-	// Hash the contract without signatures
 	contractHash := ctCopy.HashContract()
 
-	// Sign the contract hash
 	signature := ed25519.Sign(*privKey, contractHash)
 
-	// Find and update the party's signature
 	for i := range contract.Parties {
 		if contract.Parties[i].Address == string(partyAddress) {
 			contract.Parties[i].Signature = signature
@@ -140,13 +123,11 @@ func (contract *Contract) SignContract(privKey *ed25519.PrivateKey, partyAddress
 	return fmt.Errorf("[CONTRACT] ✗ Party not found in contract: %s", string(partyAddress))
 }
 
+// VerifyContract checks the validity of a contract based on its current status.
+// - For DRAFT contracts, no signatures are required.
+// - For ACTIVE contracts, it ensures that all participating parties have provided a valid signature.
+// This function is crucial for ensuring that only valid contracts are included in new blocks.
 func (blockchain *BlockChain) VerifyContract(contract *Contract) bool {
-	/*
-	   Verifies the integrity of a contract.
-	   DRAFT contracts can be added to blockchain (no signatures required yet).
-	   ACTIVE contracts require all parties to have signed.
-	   Returns true if the contract is valid for its current status.
-	*/
 	if contract.IsCoinbaseOp() {
 		return true
 	}
@@ -157,7 +138,6 @@ func (blockchain *BlockChain) VerifyContract(contract *Contract) bool {
 		return true
 	}
 
-	// ACTIVE contracts must have all parties signed
 	if contract.Status == ContractActive {
 		if !contract.AreAllPartiesSigned() {
 			unsigned := contract.GetUnsignedParties()
@@ -165,7 +145,6 @@ func (blockchain *BlockChain) VerifyContract(contract *Contract) bool {
 			return false
 		}
 
-		// Verify each party's signature is valid
 		for _, party := range contract.Parties {
 			if !contract.VerifyContractSignature([]byte(party.Address), party.PublicKey) {
 				log.Printf("[CONTRACT] ✗ Invalid signature from party: %s", party.Address)
@@ -180,16 +159,14 @@ func (blockchain *BlockChain) VerifyContract(contract *Contract) bool {
 	return true
 }
 
+// VerifyContractSignature validates a single party's signature on the contract. It reconstructs
+// the signed data hash and uses the party's public key to verify the signature, ensuring
+// that the party indeed authorized the contract.
 func (contract *Contract) VerifyContractSignature(partyAddress []byte, pubKeyBytes []byte) bool {
-	/*
-	   Verifies that a specific party has validly signed the contract.
-	   Returns true if the signature is valid, false otherwise.
-	*/
 	if contract.IsCoinbaseOp() {
 		return true
 	}
 
-	// Find the party and their signature
 	var partySignature []byte
 	for _, party := range contract.Parties {
 		if bytes.Equal([]byte(party.Address), partyAddress) {
@@ -208,17 +185,14 @@ func (contract *Contract) VerifyContractSignature(partyAddress []byte, pubKeyByt
 		return false
 	}
 
-	// Create contract copy without signatures for hashing
 	ctCopy := *contract
-	// Deep copy the parties slice to avoid modifying the original
 	ctCopy.Parties = make([]*Party, len(contract.Parties))
 	for i, party := range contract.Parties {
 		partyCopy := *party
-		partyCopy.Signature = nil // Clear signature for hashing
+		partyCopy.Signature = nil
 		ctCopy.Parties[i] = &partyCopy
 	}
 
-	// Hash the contract
 	contractHash := ctCopy.HashContract()
 
 	// Decode signature (r||s format, 64 bytes)
@@ -232,11 +206,9 @@ func (contract *Contract) VerifyContractSignature(partyAddress []byte, pubKeyByt
 	return ed25519.Verify(pubKey, contractHash, partySignature)
 }
 
+// AreAllPartiesSigned iterates through the contract's parties to check if each one has
+// provided a signature. It returns true only if every party's signature field is populated.
 func (contract *Contract) AreAllPartiesSigned() bool {
-	/*
-	   Checks if all parties have signed the contract.
-	   Returns true only if every party has a non-empty signature.
-	*/
 	if contract.IsCoinbaseOp() {
 		return true
 	}
@@ -250,10 +222,9 @@ func (contract *Contract) AreAllPartiesSigned() bool {
 	return true
 }
 
+// GetUnsignedParties returns a slice containing all parties who have not yet signed the contract.
+// This is useful for identifying which participants are still required to approve the contract.
 func (contract *Contract) GetUnsignedParties() []*Party {
-	/*
-	   Returns a list of parties that have not yet signed the contract.
-	*/
 	unsigned := make([]*Party, 0)
 
 	for _, party := range contract.Parties {
@@ -265,6 +236,9 @@ func (contract *Contract) GetUnsignedParties() []*Party {
 	return unsigned
 }
 
+// CreateContract initializes a new contract with the specified details, including title,
+// description, milestones, parties, and terms. It sets the initial status to 'ContractDraft',
+// automatically adds the creator to the list of parties, and signs the contract on behalf of the creator.
 func CreateContract(title, description string, w *wallet.Wallet, milestones []*Milestone, parties []*Party, terms []byte, attachments [][]byte) *Contract {
 	creatorAddress := string(w.Address())
 
@@ -311,10 +285,10 @@ func CreateContract(title, description string, w *wallet.Wallet, milestones []*M
 	return &contract
 }
 
+// ApproveContract allows a party to sign and approve a contract. This action is only valid
+// when the contract is in the 'ContractDraft' status. If this approval is the final one
+// required, the contract's status is automatically transitioned to 'ContractActive'.
 func (contract *Contract) ApproveContract(wallet *wallet.Wallet) error {
-	/*
-		Approves the contract by verifying the party's signature.
-	*/
 	if contract.IsCoinbaseOp() {
 		return nil
 	}
@@ -324,21 +298,17 @@ func (contract *Contract) ApproveContract(wallet *wallet.Wallet) error {
 		return fmt.Errorf("[CONTRACT] Cannot approve contract - invalid status: %s", contract.Status)
 	}
 
-	// Check if this approval will complete all signatures
 	willBeComplete := true
 	for _, party := range contract.Parties {
-		// Skip the current party (they're about to sign)
 		if bytes.Equal([]byte(party.Address), wallet.Address()) {
 			continue
 		}
-		// If any other party hasn't signed, it won't be complete
 		if len(party.Signature) == 0 {
 			willBeComplete = false
 			break
 		}
 	}
 
-	// Set status to ACTIVE if all parties will have signed after this approval
 	if willBeComplete {
 		contract.Status = ContractActive
 		contract.UpdatedAt = time.Now().Unix()
@@ -366,11 +336,11 @@ func (contract *Contract) ApproveContract(wallet *wallet.Wallet) error {
 	return nil
 }
 
+// ApproveMilestone allows a party to approve a specific milestone within a contract.
+// This action is only valid for 'ContractActive' contracts. If all parties approve a milestone,
+// its status changes to 'MilestoneCompleted'. If all milestones become completed, the
+// entire contract transitions to 'ContractCompleted'.
 func (contract *Contract) ApproveMilestone(wallet *wallet.Wallet, milestoneID []byte, evidence []byte) (*Contract, error) {
-	/*
-		Approves the milestone by verifying the party's signature.
-	*/
-
 	if contract.IsCoinbaseOp() {
 		return nil, fmt.Errorf("[MILESTONE] ✗ Coinbase contract has no milestones")
 	}
@@ -421,11 +391,9 @@ func (contract *Contract) ApproveMilestone(wallet *wallet.Wallet, milestoneID []
 	return contract, nil
 }
 
+// GetMilestoneByID searches for and returns a milestone within the contract by its unique ID.
+// It returns an error if no matching milestone is found.
 func (contract *Contract) GetMilestoneByID(milestoneID []byte) (*Milestone, error) {
-	/*
-		Retrieves a milestone from the contract by its ID.
-		Returns the milestone and nil error if found, otherwise returns an error.
-	*/
 	for _, milestone := range contract.Milestones {
 		if bytes.Equal(milestone.ID, milestoneID) {
 			return milestone, nil
@@ -434,18 +402,15 @@ func (contract *Contract) GetMilestoneByID(milestoneID []byte) (*Milestone, erro
 	return nil, errors.New("Milestone not found")
 }
 
+// PartyApproved checks if a specific party (by address) has already approved the milestone.
 func (milestone *Milestone) PartyApproved(address string) bool {
-	/*
-		Checks if a specific party has approved the milestone.
-	*/
 	return slices.Contains(milestone.ApprovedBy, address)
 }
 
+// AllMilestonesCompleted checks if all milestones within the contract have reached the
+// 'MilestoneCompleted' status. This is a key condition for the contract itself to be
+// considered completed.
 func (contract *Contract) AllMilestonesCompleted() bool {
-	/*
-		Checks if all milestones in the contract are completed.
-		Returns true only if every milestone has status MilestoneCompleted.
-	*/
 	for _, milestone := range contract.Milestones {
 		if milestone.Status != MilestoneCompleted {
 			return false
@@ -454,10 +419,8 @@ func (contract *Contract) AllMilestonesCompleted() bool {
 	return true
 }
 
+// String returns a string representation of the contract with formatted output.
 func (contract Contract) String() string {
-	/*
-		Returns a string representation of the contract.
-	*/
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("╭─── CONTRACT [%.16x...] ───╮\n", contract.ID))
 	b.WriteString(fmt.Sprintf("│ Title: %s\n", contract.Title))

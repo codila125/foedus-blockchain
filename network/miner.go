@@ -20,9 +20,14 @@ import (
 )
 
 const (
+	// minerShutdownTimeout defines the maximum duration to wait for a graceful shutdown
+	// before forcing the miner node to exit.
 	minerShutdownTimeout = 30 * time.Second
 )
 
+// createMinerNode initializes a new libp2p host configured for mining operations.
+// It listens on a predefined TCP port and returns the configured host.
+// Panics if the host cannot be created.
 func createMinerNode() host.Host {
 	node, err := libp2p.New(
 		libp2p.ListenAddrStrings(
@@ -36,6 +41,9 @@ func createMinerNode() host.Host {
 	return node
 }
 
+// RunMinerNode starts and manages a miner node. It handles connecting to the
+// network, synchronizing the blockchain, and processing network requests. It also
+// ensures a graceful shutdown on receiving termination signals.
 func RunMinerNode(port, Address string) {
 	log.Printf("[MINER] Starting node with mining enabled for address: %s", Address)
 	minerNode := createMinerNode()
@@ -61,7 +69,7 @@ func RunMinerNode(port, Address string) {
 		}
 		log.Printf("[BLOCKCHAIN] Successfully synchronized blockchain for node %s", port)
 
-		// Give extra time for database to settle after sync
+		// Allow time for the database to settle after initial synchronization.
 		log.Printf("[BLOCKCHAIN] Waiting for database to settle...")
 		time.Sleep(1 * time.Second)
 	} else {
@@ -76,11 +84,12 @@ func RunMinerNode(port, Address string) {
 	log.Printf("[MINER] Node is now ready to handle network requests and mine blocks")
 	HandleNetworkRequests(minerNode, chain, port)
 
-	// Set up graceful shutdown
+	// Set up a handler for graceful shutdown on termination signals.
 	gracefulMinerShutdown(minerNode, chain)
 }
 
-// gracefulMinerShutdown handles signal interrupts and orchestrates resource cleanup for miner nodes
+// gracefulMinerShutdown listens for system signals (SIGINT, SIGTERM) and initiates
+// a graceful shutdown of the miner node, ensuring all resources are released properly.
 func gracefulMinerShutdown(minerNode host.Host, chain *blockchain.BlockChain) {
 	shutdownChan := make(chan os.Signal, 1)
 	signal.Notify(shutdownChan, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
@@ -90,17 +99,18 @@ func gracefulMinerShutdown(minerNode host.Host, chain *blockchain.BlockChain) {
 	shutdownMinerNode(minerNode, chain)
 }
 
-// shutdownMinerNode orchestrates the graceful shutdown sequence for the miner node
+// shutdownMinerNode manages the graceful shutdown of the miner node. It closes the
+// libp2p host and blockchain database concurrently, with a timeout to prevent indefinite hanging.
 func shutdownMinerNode(minerNode host.Host, chain *blockchain.BlockChain) {
 	var wg sync.WaitGroup
 
-	// Create a context with timeout for the entire shutdown process
+	// Establish a context with a timeout for the shutdown process.
 	ctx, cancel := context.WithTimeout(context.Background(), minerShutdownTimeout)
 	defer cancel()
 
 	log.Println("[MINER] Starting shutdown sequence...")
 
-	// Stop accepting new network connections and clean up streams
+	// Concurrently close the network node to stop accepting new connections.
 	wg.Go(func() {
 		log.Println("[MINER] Closing network node...")
 		if err := minerNode.Close(); err != nil {
@@ -110,7 +120,7 @@ func shutdownMinerNode(minerNode host.Host, chain *blockchain.BlockChain) {
 		}
 	})
 
-	// Close database and other blockchain resources
+	// Concurrently close the blockchain database.
 	wg.Go(func() {
 		log.Println("[MINER] Closing blockchain database...")
 		if err := chain.Database.Close(); err != nil {
@@ -120,7 +130,7 @@ func shutdownMinerNode(minerNode host.Host, chain *blockchain.BlockChain) {
 		}
 	})
 
-	// Wait for all shutdown tasks to complete or timeout
+	// Wait for all shutdown operations to complete or for the timeout to be reached.
 	done := make(chan struct{})
 	go func() {
 		wg.Wait()

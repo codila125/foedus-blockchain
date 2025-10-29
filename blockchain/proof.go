@@ -1,3 +1,7 @@
+// Package blockchain implements the Proof-of-Work (PoW) consensus algorithm,
+// which is essential for securing the blockchain. PoW requires miners to solve a
+// computationally intensive puzzle to add new blocks, thus preventing malicious
+// actors from easily altering the chain.
 package blockchain
 
 import (
@@ -8,33 +12,39 @@ import (
 	"math/big"
 )
 
-const difficulty = 12 // Difficulty is the number of leading zero bits required in the hash
+// difficulty is a constant that determines the complexity of the mining puzzle.
+// A higher difficulty requires more computational effort to find a valid hash,
+// making the blockchain more secure. This value is used to calculate the target.
+const difficulty = 12
 
+// ProofOfWork encapsulates the data and logic required for the PoW algorithm.
+// It holds a reference to the block being mined and the target value that the
+// block's hash must be less than.
 type ProofOfWork struct {
-	Block  *Block   // The block to be mined
-	Target *big.Int // The target value that the hash must be less than
+	Block  *Block
+	Target *big.Int
 }
 
+// NewProof creates and initializes a new ProofOfWork instance for a given block.
+// It calculates the target value based on the predefined difficulty, setting the
+// challenge for the miners.
 func NewProof(b *Block) *ProofOfWork {
-	/*
-		Creates a new Proof of Work instance for the given block.
-	*/
-	target := big.NewInt(1)                  // Initialize target to 1
-	target.Lsh(target, uint(256-difficulty)) // Left shift the target to set the difficulty
+	target := big.NewInt(1)
+	target.Lsh(target, uint(256-difficulty))
 
 	pow := &ProofOfWork{b, target}
 
 	return pow
 }
 
+// InitData prepares the data that will be hashed in the PoW process. It combines
+// the block's essential headers—such as the previous block's hash, the Merkle roots
+// of transactions and contracts, the nonce, and the difficulty—into a single byte slice.
 func (pow *ProofOfWork) InitData(nonce int) []byte {
-	/*
-		Initializes the data for the Proof of Work algorithm with the given nonce.
-	*/
-	buffer := make([]byte, 0, 128) // Pre-allocate buffer with sufficient capacity
+	buffer := make([]byte, 0, 128)
 	buffer = append(buffer, pow.Block.PrevHash...)
-	buffer = append(buffer, pow.Block.HashTransactions()...) // Merkle root of transactions
-	buffer = append(buffer, pow.Block.HashContracts()...)    // Merkle root of contracts
+	buffer = append(buffer, pow.Block.HashTransactions()...)
+	buffer = append(buffer, pow.Block.HashContracts()...)
 
 	nonceBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(nonceBytes, uint64(nonce))
@@ -47,11 +57,10 @@ func (pow *ProofOfWork) InitData(nonce int) []byte {
 	return buffer
 }
 
+// Validate checks if a block's hash meets the PoW requirement. It re-hashes the
+// block's data with its stored nonce and compares the result to the target.
+// It returns true if the hash is valid, confirming that the required work was done.
 func (pow *ProofOfWork) Validate() bool {
-	/*
-		Validates the Proof of Work by checking if the hash of the block is less than the target.
-		Returns true if valid, false otherwise.
-	*/
 	var intHash big.Int
 
 	data := pow.InitData(pow.Block.Nonce)
@@ -62,26 +71,27 @@ func (pow *ProofOfWork) Validate() bool {
 	return intHash.Cmp(pow.Target) == -1
 }
 
+// Run executes the mining process. It repeatedly hashes the block's data with
+// different nonce values until it finds a hash that is less than the target.
+// This iterative process is the "work" in Proof-of-Work. It returns the successful
+// nonce and the resulting block hash.
 func (pow *ProofOfWork) Run() (int, []byte) {
 	var intHash big.Int
 	var hash [32]byte
 
 	nonce := 0
-	progressInterval := 100000 // Log every 100k attempts
+	progressInterval := 100000
 
-	// Iterate until a valid nonce is found or the maximum integer value is reached
 	for nonce < math.MaxInt64 {
 		data := pow.InitData(nonce)
 		hash = sha256.Sum256(data)
 
 		intHash.SetBytes(hash[:])
 
-		// Show progress every progressInterval attempts
 		if nonce%progressInterval == 0 && nonce > 0 {
 			log.Printf("[PoW] Mining in progress... Nonce: %d (attempts)", nonce)
 		}
 
-		// Check if the hash meets the target
 		if intHash.Cmp(pow.Target) == -1 {
 			log.Printf("[PoW] ✓ Mining complete! Found valid nonce: %d", nonce)
 			break

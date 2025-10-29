@@ -10,20 +10,25 @@ import (
 	multiaddr "github.com/multiformats/go-multiaddr"
 )
 
-// PeerNotifee implements network.Notifiee to listen for peer events
+// PeerNotifee implements the libp2p network.Notifiee interface to handle peer-related events,
+// such as connections and disconnections. This allows the node to react dynamically to changes
+// in network topology.
 type PeerNotifee struct {
 	host   host.Host
 	chain  *blockchain.BlockChain
 	nodeID string
 }
 
-// Listen is called when the network starts listening on a new multiaddr
+// Listen is called when the network begins listening on a new multiaddress.
+// This implementation is a no-op as no action is needed on this event.
 func (p *PeerNotifee) Listen(network.Network, multiaddr.Multiaddr) {}
 
-// ListenClose is called when the network stops listening on a multiaddr
+// ListenClose is called when the network stops listening on a multiaddress.
+// This implementation is a no-op as no action is needed on this event.
 func (p *PeerNotifee) ListenClose(network.Network, multiaddr.Multiaddr) {}
 
-// Connected is called when a connection is established
+// Connected is called when a new connection to a peer is established. It logs the event
+// and triggers a blockchain synchronization check to ensure the local node is up-to-date.
 func (p *PeerNotifee) Connected(net network.Network, conn network.Conn) {
 	remotePeer := conn.RemotePeer()
 	remoteAddr := conn.RemoteMultiaddr()
@@ -52,7 +57,8 @@ func (p *PeerNotifee) Connected(net network.Network, conn network.Conn) {
 	}
 }
 
-// Disconnected is called when a connection is closed
+// Disconnected is called when a connection to a peer is closed. It logs the event
+// to provide visibility into network churn.
 func (p *PeerNotifee) Disconnected(net network.Network, conn network.Conn) {
 	remotePeer := conn.RemotePeer()
 
@@ -60,13 +66,15 @@ func (p *PeerNotifee) Disconnected(net network.Network, conn network.Conn) {
 	log.Printf("[SOURCE NODE]   Total peers: %d", len(p.host.Network().Peers()))
 }
 
-// OpenedStream is called when a stream is opened
+// OpenedStream is called when a new stream is opened to a peer.
+// This implementation is a no-op as no action is needed on this event.
 func (p *PeerNotifee) OpenedStream(net network.Network, stream network.Stream) {}
 
-// ClosedStream is called when a stream is closed
+// ClosedStream is called when a stream to a peer is closed.
+// This implementation is a no-op as no action is needed on this event.
 func (p *PeerNotifee) ClosedStream(net network.Network, stream network.Stream) {}
 
-// SetupPeerEventListeners sets up listeners for peer connect/disconnect events
+// SetupPeerEventListeners registers a notifiee to monitor peer connection and disconnection events in the network.
 func SetupPeerEventListeners(h host.Host, chain *blockchain.BlockChain, nodeID string) {
 	notifee := &PeerNotifee{
 		host:   h,

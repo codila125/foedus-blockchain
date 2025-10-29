@@ -9,6 +9,8 @@ import (
 	peerstore "github.com/libp2p/go-libp2p/core/peer"
 )
 
+// createSourceNode creates and initializes a libp2p host node, which serves as the primary
+// entry point for other peers to connect to the network. It listens on a well-known port.
 func createSourceNode() host.Host {
 	node, err := libp2p.New(
 		libp2p.ListenAddrStrings(
@@ -22,6 +24,9 @@ func createSourceNode() host.Host {
 	return node
 }
 
+// RunSourceNode initializes and runs the source node, which acts as a stable anchor
+// in the network. It sets up peer event listeners and handles incoming network requests,
+// facilitating blockchain synchronization and communication for all other nodes.
 func RunSourceNode(chain *blockchain.BlockChain, nodeID string) host.Host {
 	sourceNode := createSourceNode()
 	PrintNodeID(sourceNode)

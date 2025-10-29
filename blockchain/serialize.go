@@ -7,10 +7,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// SerializeOutputs converts a collection of transaction outputs (TxOutputs) into a
+// byte slice using protobuf encoding. This is used for storing outputs in the database
+// or transmitting them over the network.
 func (outs TxOutputs) SerializeOutputs() []byte {
-	/*
-		Serializes the TxOutputs struct into a byte slice.
-	*/
 	protoOutputs := &protobuf.TxOutputs{}
 
 	for _, output := range outs.Outputs {
@@ -25,11 +25,10 @@ func (outs TxOutputs) SerializeOutputs() []byte {
 	return data
 }
 
+// DeserializeOutputs reconstructs a TxOutputs object from a protobuf-encoded byte slice.
+// This is the counterpart to SerializeOutputs and is used to read outputs from the
+// database or network streams.
 func DeserializeOutputs(data []byte) TxOutputs {
-	/*
-		Deserializes a byte slice into a TxOutputs struct.
-		'data' is the byte slice to be deserialized.
-	*/
 
 	protobufOutputs := &protobuf.TxOutputs{}
 
@@ -47,11 +46,9 @@ func DeserializeOutputs(data []byte) TxOutputs {
 	return outputs
 }
 
+// SerializeTransaction encodes a Transaction object into a byte slice using protobuf.
+// This standard format is essential for hashing, signing, and network transmission.
 func (tx *Transaction) SerializeTransaction() []byte {
-	/*
-		Serializes the transaction using protobuf encoding.
-		Returns the serialized byte slice.
-	*/
 	protoTransaction := &protobuf.Transaction{
 		Id:      tx.ID,
 		Inputs:  []*protobuf.TxInput{},
@@ -80,10 +77,10 @@ func (tx *Transaction) SerializeTransaction() []byte {
 	return data
 }
 
+// DeserializeTransaction reconstructs a Transaction object from a protobuf-encoded byte slice.
+// This function is critical for processing transactions received from the network or
+// loaded from the blockchain.
 func DeserializeTransaction(data []byte) Transaction {
-	/*
-		Deserializes a byte slice into a Transaction.
-	*/
 	var tx protobuf.Transaction
 	err := proto.Unmarshal(data, &tx)
 	Handle(err)
@@ -110,10 +107,10 @@ func DeserializeTransaction(data []byte) Transaction {
 	return Transaction{tx.Id, inputs, outputs}
 }
 
+// SerializeMilestoneCore encodes the immutable 'core' fields of a milestone into a
+// protobuf byte slice. This serialized data is used for hashing to create the milestone's
+// unique ID, ensuring that the ID is based only on its non-malleable attributes.
 func (mm *MilestoneCore) SerializeMilestoneCore() []byte {
-	/*
-		Serializes the immutable core of the milestone into a byte array.
-	*/
 	protoMilestoneCore := &protobuf.MilestoneCore{
 		Title:       mm.Title,
 		Description: mm.Description,
@@ -127,10 +124,10 @@ func (mm *MilestoneCore) SerializeMilestoneCore() []byte {
 	return data
 }
 
+// SerializeContractState encodes a ContractState object, which includes both the contract
+// and its associated milestones, into a protobuf byte slice. This is used for storing
+// the complete state of a contract in the Incomplete Contract (ICCT) set.
 func (cs *ContractState) SerializeContractState() []byte {
-	/*
-		Serializes the contract state into a byte array.
-	*/
 	protoContractState := &protobuf.ContractState{}
 
 	for _, ms := range cs.Milestones {
@@ -162,7 +159,6 @@ func (cs *ContractState) SerializeContractState() []byte {
 		Parties:        []*protobuf.Party{},
 	}
 
-	// Serialize Parties
 	for _, p := range cs.Contract.Parties {
 		protoParty := &protobuf.Party{
 			Address:   p.Address,
@@ -182,10 +178,9 @@ func (cs *ContractState) SerializeContractState() []byte {
 	return data
 }
 
+// DeserializeContractState reconstructs a ContractState object from a protobuf-encoded
+// byte slice. This is used to retrieve the full state of a contract from the ICCT set.
 func DeserializeContractState(data []byte) ContractState {
-	/*
-		Deserializes a byte array into a ContractState.
-	*/
 	var state ContractState
 
 	protoContractState := &protobuf.ContractState{}
@@ -243,7 +238,9 @@ func DeserializeContractState(data []byte) ContractState {
 	return state
 }
 
-// SerializeContractCore serializes the immutable core of the contract into a byte array.
+// SerializeContractCore encodes the immutable 'core' fields of a contract into a protobuf
+// byte slice. This data is used for hashing to generate the contract's unique ID,
+// ensuring the ID is derived from its foundational, non-malleable properties.
 func (cc *ContractCore) SerializeContractCore() []byte {
 	protoContractCore := &protobuf.ContractCore{
 		Title:          cc.Title,
@@ -280,11 +277,10 @@ func (cc *ContractCore) SerializeContractCore() []byte {
 	return data
 }
 
+// SerializeBlock encodes an entire Block, including its header, transactions, and contracts,
+// into a protobuf byte slice. This is the canonical format for storing blocks in the
+// database and transmitting them across the network.
 func (b *Block) SerializeBlock() []byte {
-	/*
-		Serializes the block into a byte slice.
-	*/
-
 	protoBlock := &protobuf.Block{
 		Timestamp: b.Timestamp,
 		Hash:      b.Hash,
@@ -371,10 +367,10 @@ func (b *Block) SerializeBlock() []byte {
 	return data
 }
 
+// DeserializeBlock reconstructs a Block object from a protobuf-encoded byte slice.
+// This function is essential for interpreting block data received from peers or loaded
+// from the database.
 func DeserializeBlock(data []byte) *Block {
-	/*
-		Deserializes a byte slice into a Block.
-	*/
 	var block Block
 
 	protoBlock := &protobuf.Block{}

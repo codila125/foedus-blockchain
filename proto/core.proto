@@ -4,10 +4,6 @@ package core;
 
 option go_package = "github.com/codila125/foedus-blockchain/protobuf";
 
-// ============================================================================
-// Contract Core Structures (Immutable parts for ID generation)
-// ============================================================================
-
 // ContractCore represents the immutable core of a contract for ID generation
 message ContractCore {
     string title = 1;

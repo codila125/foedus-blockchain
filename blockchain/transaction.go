@@ -1,3 +1,6 @@
+// Package blockchain implements the logic for creating, signing, and verifying
+// transactions. Transactions are the fundamental building blocks for transferring
+// value and executing operations on the Foedus blockchain.
 package blockchain
 
 import (
@@ -13,51 +16,50 @@ import (
 	"github.com/codila125/foedus-blockchain/wallet"
 )
 
+// Transaction represents a transfer of value on the blockchain. It consists of
+// a set of inputs, which reference previously unspent transaction outputs (UTXOs),
+// and a set of outputs, which create new UTXOs.
 type Transaction struct {
 	ID      []byte
 	Inputs  []TxInput
 	Outputs []TxOutput
 }
 
+// CoinbaseTx creates a special type of transaction known as a coinbase transaction.
+// This transaction is created by a miner who successfully mines a new block and
+// serves as a reward. It has no inputs and creates new coins.
 func CoinbaseTx(to, data string) *Transaction {
-	/*
-		Creates a coinbase transaction that rewards the miner.
-		'to' is the address to send the reward to.
-		'data' is arbitrary data, often used to include a message or extra information.
-	*/
 	if data == "" {
-		randData := make([]byte, 20) // Generate 20 random bytes
+		randData := make([]byte, 20)
 		_, err := rand.Read(randData)
 		if err != nil {
 			log.Panic(err)
 		}
-		data = fmt.Sprintf("%x", randData) // Convert random bytes to a hex string
+		data = fmt.Sprintf("%x", randData)
 	}
 
-	txin := TxInput{[]byte{}, -1, nil, []byte(data)} // Coinbase input has no previous transaction, hence ID is empty and Out is -1
-	txout := NewTxOutput(20, to)                     // Coinbase transaction typically has a fixed reward, here set to 20
+	txin := TxInput{[]byte{}, -1, nil, []byte(data)}
+	txout := NewTxOutput(20, to)
 
-	tx := Transaction{nil, []TxInput{txin}, []TxOutput{*txout}} // Create the transaction with the input and output
-	tx.ID = tx.HashTransaction()                                // Set the transaction ID by hashing the transaction
+	tx := Transaction{nil, []TxInput{txin}, []TxOutput{*txout}}
+	tx.ID = tx.HashTransaction()
 
 	return &tx
 }
 
+// IsCoinbaseTx checks if a transaction is a coinbase transaction. A coinbase
+// transaction is identified by having exactly one input where the referenced
+// transaction ID is empty and the output index is -1.
 func (tx *Transaction) IsCoinbaseTx() bool {
-	/*
-		Checks if the transaction is a coinbase transaction.
-		Returns true if the transaction has exactly one input and that input has an empty ID and an Out value of -1.
-	*/
 	return len(tx.Inputs) == 1 && len(tx.Inputs[0].ID) == 0 && tx.Inputs[0].Out == -1
 }
 
+// FindTransaction searches the entire blockchain for a transaction with a given ID.
+// It iterates through each block and its transactions until a match is found.
+// If the transaction is not found, it returns an error.
 func (blockchain *BlockChain) FindTransaction(ID []byte) (Transaction, error) {
-	/*
-		Finds and returns a transaction by its ID by scanning through all blocks in the blockchain.
-		Returns the transaction if found, otherwise returns an error.
-	*/
 	iterator := blockchain.Iterator()
-	// Iterate through the blocks in the blockchain
+
 	for {
 		block := iterator.Next()
 
@@ -72,45 +74,38 @@ func (blockchain *BlockChain) FindTransaction(ID []byte) (Transaction, error) {
 		}
 	}
 
-	return Transaction{}, errors.New("Transaction does not exist")
+	return Transaction{}, errors.New("transaction does not exist")
 }
 
+// SignTransaction signs a transaction using the provided private key. Before signing,
+// it retrieves all the previous transactions referenced by the inputs to ensure
+// the integrity of the signing process. Coinbase transactions are not signed.
 func (blockchain *BlockChain) SignTransaction(tx *Transaction, privKey ed25519.PrivateKey) {
-	/*
-		Signs a transaction using the provided private key.
-		'tx' is the transaction to be signed.
-		'privKey' is the Ed25519 private key used for signing.
-	*/
 	if tx.IsCoinbaseTx() {
 		return
 	}
 	prevTXs := make(map[string]Transaction)
 	for _, in := range tx.Inputs {
-		prevTX, err := blockchain.FindTransaction(in.ID) // Find the previous transaction referenced by the input
+		prevTX, err := blockchain.FindTransaction(in.ID)
 		Handle(err)
 		prevTXs[hex.EncodeToString(prevTX.ID)] = prevTX
 	}
-	tx.Sign(privKey, prevTXs) // Sign the transaction with the private key and previous transactions
+	tx.Sign(privKey, prevTXs)
 }
 
+// VerifyTransaction validates the signatures of a transaction. It checks that each
+// input's signature is valid for the public key of the referenced output. It can
+// also verify transactions that are part of the same block or mempool using txMap.
 func (blockchain *BlockChain) VerifyTransaction(tx *Transaction, txMap map[string]Transaction) bool {
-	/*
-	   Verifies the signatures of a transaction.
-	   'tx' is the transaction to be verified.
-	   'txMap' is a map of other transactions in the same block/pool.
-	   Returns true if the transaction is valid, false otherwise.
-	*/
 	if tx.IsCoinbaseTx() {
 		return true
 	}
 	prevTXs := make(map[string]Transaction)
 
 	for _, in := range tx.Inputs {
-		// First, check if the previous transaction is in the current pool of transactions.
 		if prevTx, ok := txMap[hex.EncodeToString(in.ID)]; ok {
 			prevTXs[hex.EncodeToString(prevTx.ID)] = prevTx
 		} else {
-			// If not in the pool, search the blockchain.
 			prevTX, err := blockchain.FindTransaction(in.ID)
 			if err != nil {
 				log.Printf("[VERIFY] Transaction verification failed - Parent transaction %x not found", in.ID)
@@ -128,21 +123,17 @@ func (blockchain *BlockChain) VerifyTransaction(tx *Transaction, txMap map[strin
 	return true
 }
 
+// NewTransaction creates a new transaction to transfer a specified amount from a
+// sender's wallet to a recipient's address. It gathers spendable outputs from the
+// UTXO set, creates the necessary inputs and outputs, and signs the transaction.
+// It panics if the sender has insufficient funds.
 func NewTransaction(w *wallet.Wallet, to string, amount int, UTXO *UTXOSet) *Transaction {
-	/*
-		Creates a new transaction from one address to another.
-		'from' is the sender's address.
-		'to' is the recipient's address.
-		'amount' is the amount to send.
-		'UTXO' is the UTXO set used to find spendable outputs.
-	*/
 	var inputs []TxInput
 	var outputs []TxOutput
-	// Get the wallet for the sender's address
-	pubKeyHash := wallet.PublicKeyHash(w.PublicKey)                    // Get the public key hash from the wallet's public key
-	acc, validOutputs := UTXO.FindSpendableOutputs(pubKeyHash, amount) // Find spendable outputs for the public key hash
 
-	// Check if the accumulated amount is less than the requested amount
+	pubKeyHash := wallet.PublicKeyHash(w.PublicKey)
+	acc, validOutputs := UTXO.FindSpendableOutputs(pubKeyHash, amount)
+
 	if acc < amount {
 		log.Panicf("[TRANSACTION] Insufficient funds - Required: %d, Available: %d", amount, acc)
 	}
@@ -151,22 +142,21 @@ func NewTransaction(w *wallet.Wallet, to string, amount int, UTXO *UTXOSet) *Tra
 		txID, err := hex.DecodeString(txid)
 		Handle(err)
 
-		// Create a new input for each output which is being used
 		for _, out := range outs {
-			input := TxInput{txID, out, nil, w.PublicKey} // Create a new input referencing the output
+			input := TxInput{txID, out, nil, w.PublicKey}
 			inputs = append(inputs, input)
 		}
 	}
 
-	from := string(w.Address())                         // Get the sender's address from the wallet
-	outputs = append(outputs, *NewTxOutput(amount, to)) // Create the output to the recipient
+	from := string(w.Address())
+	outputs = append(outputs, *NewTxOutput(amount, to))
 
 	if acc > amount {
-		outputs = append(outputs, *NewTxOutput(acc-amount, from)) // Create a change output if there's leftover amount
+		outputs = append(outputs, *NewTxOutput(acc-amount, from))
 	}
 
-	tx := Transaction{nil, inputs, outputs}    // Create the transaction with inputs and outputs
-	tx.ID = tx.HashTransaction()               // Sign the transaction to prove ownership of the inputs
+	tx := Transaction{nil, inputs, outputs}
+	tx.ID = tx.HashTransaction()
 
 	UTXO.Blockchain.SignTransaction(&tx, w.PrivateKey)
 
@@ -174,6 +164,9 @@ func NewTransaction(w *wallet.Wallet, to string, amount int, UTXO *UTXOSet) *Tra
 	return &tx
 }
 
+// Sign generates a digital signature for each input in the transaction. It uses
+// the provided private key and a map of the previous transactions to create a
+// trimmed copy of the transaction for signing, ensuring each input is authorized.
 func (tx *Transaction) Sign(privKey ed25519.PrivateKey, prevTXs map[string]Transaction) {
 	if tx.IsCoinbaseTx() {
 		return
@@ -200,11 +193,10 @@ func (tx *Transaction) Sign(privKey ed25519.PrivateKey, prevTXs map[string]Trans
 	}
 }
 
+// TrimmedCopy creates a simplified copy of the transaction, with signatures and
+// public keys removed from the inputs. This version of the transaction is used
+// during the signing and verification process to ensure consistency.
 func (tx *Transaction) TrimmedCopy() Transaction {
-	/*
-		Creates a trimmed copy of the transaction with empty signatures and public keys in the inputs.
-		Returns the trimmed copy of the transaction.
-	*/
 	var inputs []TxInput
 	var outputs []TxOutput
 
@@ -220,6 +212,9 @@ func (tx *Transaction) TrimmedCopy() Transaction {
 	return txCopy
 }
 
+// Verify checks the validity of the signatures for each input in the transaction.
+// It reconstructs the data that was signed and uses the public key from the input
+// to verify the signature. It returns true if all signatures are valid.
 func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
 	if tx.IsCoinbaseTx() {
 		return true
@@ -250,6 +245,9 @@ func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
 	return true
 }
 
+// String provides a human-readable, formatted string representation of the
+// transaction. It details the transaction ID, its inputs, and its outputs,
+// making it easier to inspect and debug.
 func (tx Transaction) String() string {
 	var b strings.Builder
 

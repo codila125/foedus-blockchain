@@ -4,10 +4,6 @@ package block;
 
 option go_package = "github.com/codila125/foedus-blockchain/protobuf";
 
-// ============================================================================
-// Block Structure
-// ============================================================================
-
 // Block represents a block in the blockchain
 message Block {
     int64 timestamp = 1;
@@ -18,10 +14,6 @@ message Block {
     int32 nonce = 6;
     int32 height = 7;
 }
-
-// ============================================================================
-// Transaction Structures
-// ============================================================================
 
 // Transaction represents a transaction in the blockchain
 message Transaction {
@@ -48,10 +40,6 @@ message TxOutput {
 message TxOutputs {
     repeated TxOutput outputs = 1;
 }
-
-// ============================================================================
-// Contract Structures
-// ============================================================================
 
 // Contract represents a smart contract with milestones
 message Contract {

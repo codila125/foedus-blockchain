@@ -9,12 +9,14 @@ import (
 	"runtime"
 )
 
+// Run is the main entry point for the command-line interface. It parses user
+// commands and their arguments, validates them, and dispatches the corresponding
+// actions, such as creating a blockchain, sending funds, or printing the chain.
+// It requires the NODE_ID environment variable to be set to identify the current
+// node.
 func (cli *CommandLine) Run() {
-	/*
-		Parses and executes the command line arguments.
-	*/
 	cli.validateArgs()
-	nodeID := os.Getenv("NODE_ID") // Get the node ID from the environment variable
+	nodeID := os.Getenv("NODE_ID")
 	if nodeID == "" {
 		fmt.Printf("NODE_ID env. var is not set!")
 		runtime.Goexit()

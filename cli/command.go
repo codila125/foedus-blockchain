@@ -11,12 +11,15 @@ import (
 	"github.com/codila125/foedus-blockchain/wallet"
 )
 
+// CommandLine serves as the entry point for all command-line operations.
+// It provides a structured way to handle user input and execute corresponding
+// blockchain functionalities.
 type CommandLine struct{}
 
+// printUsage displays a comprehensive list of available commands and their
+// usage instructions. This function is automatically called when the user
+// provides invalid or insufficient arguments.
 func (cli *CommandLine) printUsage() {
-	/*
-		Prints the usage instructions for the command line interface.
-	*/
 	fmt.Println("Usage:")
 	fmt.Println(" getbalance -address <ADDRESS> : get the balance for an address")
 	fmt.Println(" createblockchain -address <ADDRESS> : creates a blockchain and sends genesis reward to address")
@@ -28,21 +31,19 @@ func (cli *CommandLine) printUsage() {
 	fmt.Println(" startnode -source <ADDRESS> : starts a node with ID specified in NODE_ID env. var. -miner enables mining")
 }
 
+// validateArgs checks if the user has provided the minimum required arguments
+// to run a command. If not, it prints the usage information and exits.
 func (cli *CommandLine) validateArgs() {
-	/*
-			Validates that at least one command line argument is provided.
-		   If no arguments are provided, it prints the usage instructions and exits the program.
-	*/
 	if len(os.Args) < 2 {
 		cli.printUsage()
 		runtime.Goexit()
 	}
 }
 
+// listAddresses retrieves and displays all wallet addresses stored on the
+// current node. It provides a simple way for users to view their available
+// addresses.
 func (cli *CommandLine) listAddresses(nodeID string) {
-	/*
-		Lists all wallet addresses stored in the wallet file.
-	*/
 	wallets, _ := wallet.CreateWallets(nodeID)
 	log.Printf("[CLI] Listing all wallet addresses:")
 
@@ -52,10 +53,10 @@ func (cli *CommandLine) listAddresses(nodeID string) {
 	}
 }
 
+// createWallet generates a new cryptographic key pair (wallet), saves it to
+// the node's storage, and prints the new wallet address. This allows users
+// to create new identities for transacting on the blockchain.
 func (cli *CommandLine) createWallet(nodeID string) {
-	/*
-		Creates a new wallet, saves it to the wallet file, and prints the new address.
-	*/
 	wallets, _ := wallet.CreateWallets(nodeID)
 	address := wallets.AddWallet()
 	err := wallets.SaveFile(nodeID)
@@ -67,20 +68,19 @@ func (cli *CommandLine) createWallet(nodeID string) {
 	log.Printf("[WALLET] New wallet created successfully with address: %s\n", address)
 }
 
+// printChain iterates through the entire blockchain and prints a detailed
+// view of each block, including its header, transactions, and contracts.
+// This is useful for debugging and verifying the chain's integrity.
 func (cli *CommandLine) printChain(nodeID string) {
-	/*
-		Prints all the blocks in the blockchain along with their details in a formatted block structure.
-	*/
-	chain := blockchain.ContinueBlockChain(nodeID) // Load the existing blockchain
+	chain := blockchain.ContinueBlockChain(nodeID)
 	defer func() {
 		_ = chain.Database.Close()
 	}()
 	iter := chain.Iterator()
 
 	blockNumber := 0
-	// Iterate through the blocks in the blockchain and print their details
 	for {
-		block := iter.Next() // Get the next block
+		block := iter.Next()
 
 		cli.printBlockHeader(block, blockNumber)
 		cli.printBlockContracts(block)
@@ -88,58 +88,54 @@ func (cli *CommandLine) printChain(nodeID string) {
 		cli.printBlockFooter()
 
 		blockNumber++
-		// Break the loop if we reach the genesis block (no previous hash)
 		if len(block.PrevHash) == 0 {
 			break
 		}
 	}
 }
 
+// createBlockChain initializes a new blockchain with a genesis block, which
+// is the first block in the chain. It also creates the initial UTXO and ICCT
+// sets, which are essential for processing future transactions and contracts.
 func (cli *CommandLine) createBlockChain(address string, nodeID string) {
-	/*
-		Creates a new blockchain and sends the genesis block reward to the specified address.
-		Also initializes the UTXO set for the new blockchain.
-	*/
-	if !wallet.ValidateAddress(address) { // Validate the provided address
+	if !wallet.ValidateAddress(address) {
 		log.Panic("[CLI] Invalid address provided")
 	}
 
 	log.Printf("[CLI] Creating new blockchain for address: %s", address)
-	chain := blockchain.NewBlockChain(address, nodeID) // Create a new blockchain with the genesis block
+	chain := blockchain.NewBlockChain(address, nodeID)
 
 	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
-	UTXOSet.Reindex() // Rebuild the UTXO set from the blockchain
+	UTXOSet.Reindex()
 
 	ICCTSet := blockchain.ICCTSet{Blockchain: chain}
-	ICCTSet.Reindex() // Rebuild the ICCT set from the blockchain
+	ICCTSet.Reindex()
 
-	chain.Database.Close() // Close the database connection
+	chain.Database.Close()
 
 	log.Printf("[CLI] ✓ Blockchain created successfully")
 }
 
+// getBalance calculates and displays the total balance of a given wallet
+// address. It does this by summing the values of all unspent transaction
+// outputs (UTXOs) associated with the address's public key hash.
 func (cli *CommandLine) getBalance(address string, nodeID string) {
-	/*
-		Calculates and prints the balance of the specified address by summing its unspent transaction outputs (UTXOs).
-	*/
 	if !wallet.ValidateAddress(address) {
 		log.Panic("[CLI] Invalid address provided")
 	}
 
 	log.Printf("[CLI] Fetching balance for address: %s", address)
 
-	// Load the existing blockchain and rebuild the UTXO set
-	chain := blockchain.ContinueBlockChain(nodeID) // Load the existing blockchain
+	chain := blockchain.ContinueBlockChain(nodeID)
 	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
 
 	defer chain.Database.Close()
 
 	balance := 0
-	pubKeyHash := wallet.Base58Decode([]byte(address))   // Decode the address to get the public key hash
-	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-4]       // Remove the version byte and checksum
-	UTXOs := UTXOSet.FindUnspentTransactions(pubKeyHash) // Find all unspent transactions for the public key hash
+	pubKeyHash := wallet.Base58Decode([]byte(address))
+	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-4]
+	UTXOs := UTXOSet.FindUnspentTransactions(pubKeyHash)
 
-	// Sum the values of all unspent transaction outputs to get the balance
 	for _, out := range UTXOs {
 		balance += out.Value
 	}
@@ -147,12 +143,10 @@ func (cli *CommandLine) getBalance(address string, nodeID string) {
 	log.Printf("[CLI] Balance of %s retrieved: %d", address, balance)
 }
 
+// send facilitates the transfer of a specified amount of currency from a
+// sender's address to a recipient's address. It creates a new transaction,
+// mines a new block to include it, and updates the UTXO set accordingly.
 func (cli *CommandLine) send(from, to string, amount int, nodeID string) {
-	/*
-		Creates and sends a new transaction from one address to another, including a coinbase transaction for the sender.
-		Updates the UTXO set after adding the new block to the blockchain.
-	*/
-	// Validate the provided addresses
 	if !wallet.ValidateAddress(from) {
 		log.Panic("[CLI] Invalid sender address")
 	}
@@ -162,52 +156,50 @@ func (cli *CommandLine) send(from, to string, amount int, nodeID string) {
 
 	log.Printf("[CLI] Initiating transaction: %d from %s to %s", amount, from, to)
 
-	// Load the existing blockchain and UTXO set
 	chain := blockchain.ContinueBlockChain(nodeID)
 	defer chain.Database.Close()
 	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
 
-	wallets, err := wallet.CreateWallets(nodeID) // Load existing wallets
+	wallets, err := wallet.CreateWallets(nodeID)
 	if err != nil {
 		log.Panic(err)
 	}
-	wallet, err := wallets.GetWallet(from) // Get the wallet for the sender's address
+	wallet, err := wallets.GetWallet(from)
 	if err != nil {
 		log.Panic(err)
 	}
 
-	// Create a new transaction from the sender to the recipient
 	tx := blockchain.NewTransaction(&wallet, to, amount, &UTXOSet)
 	log.Printf("[CLI] Mining transaction locally")
-	cbTx := blockchain.CoinbaseTx(from, "")    // Create a coinbase transaction for the sender
-	txs := []*blockchain.Transaction{cbTx, tx} // Include the coinbase transaction in the new block
-	newBlock := chain.MineBlock(txs, nil)      // Mine a new block with the transactions                   // Update the UTXO set with the new block
+	cbTx := blockchain.CoinbaseTx(from, "")
+	txs := []*blockchain.Transaction{cbTx, tx}
+	newBlock := chain.MineBlock(txs, nil)
 	log.Printf("[CLI] ✓ Transaction mined in block %x", newBlock.Hash)
 }
 
+// reindex rebuilds the Unspent Transaction Output (UTXO) and Incomplete
+// Contract (ICCT) sets from the blockchain data. This operation is crucial
+// for ensuring data consistency and can resolve discrepancies that may arise
+// during network operations.
 func (cli *CommandLine) reindex(nodeID string) {
-	/*
-		Rebuilds the UTXO set and ICCT set from the current state of the blockchain.
-	*/
 	log.Printf("[CLI] Starting UTXO and ICCT reindex operation")
-	chain := blockchain.ContinueBlockChain(nodeID) // Load the existing blockchain
+	chain := blockchain.ContinueBlockChain(nodeID)
 	defer chain.Database.Close()
 
-	UTXOSet := blockchain.UTXOSet{Blockchain: chain} // Create a UTXO set instance
-	UTXOSet.Reindex()                                // Rebuild the UTXO set
-	count := UTXOSet.CountTransactions()             // Count the number of transactions in the UTXO set
+	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
+	UTXOSet.Reindex()
+	count := UTXOSet.CountTransactions()
 	log.Printf("[CLI] ✓ UTXO reindex complete - %d transaction(s) in set", count)
 
-	ICCTSet := blockchain.ICCTSet{Blockchain: chain} // Create an ICCT set instance
-	ICCTSet.Reindex()                                // Rebuild the ICCT set
-	contractCount := ICCTSet.CountContracts()        // Count the number of contracts in the ICCT set
+	ICCTSet := blockchain.ICCTSet{Blockchain: chain}
+	ICCTSet.Reindex()
+	contractCount := ICCTSet.CountContracts()
 	log.Printf("[CLI] ✓ ICCT reindex complete - %d incomplete contract(s) in set", contractCount)
 }
 
+// startNode launches a new node and connects it to the blockchain network.
+// It can optionally start in mining mode, which allows the node to create
+// new blocks and earn rewards, sent to the specified miner address.
 func (cli *CommandLine) startNode(nodeID string, minerAddress string) {
-	/*
-		Starts a new node in the blockchain network.
-		If a miner address is provided, the node will also mine new blocks and send rewards to that address.
-	*/
 	network.RunMinerNode(nodeID, minerAddress)
 }
