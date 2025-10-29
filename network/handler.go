@@ -1,16 +1,19 @@
 package network
 
 import (
+	"bufio"
+	"encoding/binary"
 	"log"
-	"encoding/gob"
 
 	"github.com/codila125/foedus-blockchain/blockchain"
+	"github.com/codila125/foedus-blockchain/protobuf"
 	"github.com/libp2p/go-libp2p/core/host"
 	network "github.com/libp2p/go-libp2p/core/network"
+	"google.golang.org/protobuf/proto"
 )
 
-func HandleNetworkRequests(s host.Host, chain *blockchain.BlockChain, nodeID string) {
-	s.SetStreamHandler(protocolID, func(stream network.Stream) {
+func HandleNetworkRequests(h host.Host, chain *blockchain.BlockChain, nodeID string) {
+	h.SetStreamHandler(protocolID, func(stream network.Stream) {
 		buf := make([]byte, 1024)
 		n, err := stream.Read(buf)
 		if err != nil {
@@ -24,22 +27,22 @@ func HandleNetworkRequests(s host.Host, chain *blockchain.BlockChain, nodeID str
 
 		switch command {
 		case "GET_BLOCKCHAIN":
-			HandleGetBlockchainRequest(stream, chain)
+			HandleGetBlockchainRequest(h, stream, chain)
 		case "GET_BLOCKS":
-			HandleGetBlocksRequest(stream, chain)
+			HandleGetBlocksRequest(h, stream, chain)
 		case "GET_VERSION":
-			HandleGetVersionRequest(stream, chain, nodeID)
+			HandleGetVersionRequest(h, stream, chain, nodeID)
 		case "NEW_CONTRACT":
-			HandleReceiveContractRequest(stream, s, chain)
+			HandleReceiveContractRequest(h, stream, chain)
 		case "NEW_BLOCK":
-			HandleReceiveNewBlockRequest(stream, chain)
+			HandleReceiveNewBlockRequest(h, stream, chain)
 		default:
 			stream.Close()
 		}
 	})
 }
 
-func HandleGetBlockchainRequest(s network.Stream, chain *blockchain.BlockChain) {
+func HandleGetBlockchainRequest(h host.Host, s network.Stream, chain *blockchain.BlockChain) {
 	defer s.Close()
 
 	blockHashes := chain.GetBlockHashes()
@@ -50,10 +53,8 @@ func HandleGetBlockchainRequest(s network.Stream, chain *blockchain.BlockChain) 
 		blockHashes[i], blockHashes[j] = blockHashes[j], blockHashes[i]
 	}
 
-	encoder := gob.NewEncoder(s)
-
 	// Use modular SendBlocks function
-	if err := SendBlocks(encoder, blockHashes, chain.GetBlock); err != nil {
+	if err := SendBlocks(s, blockHashes, chain.GetBlock); err != nil {
 		log.Printf("[NETWORK] Error sending blocks: %v", err)
 		return
 	}
@@ -62,22 +63,34 @@ func HandleGetBlockchainRequest(s network.Stream, chain *blockchain.BlockChain) 
 }
 
 // HandleGetBlocksRequest responds with only blocks after the requested height
-func HandleGetBlocksRequest(s network.Stream, chain *blockchain.BlockChain) {
+func HandleGetBlocksRequest(h host.Host, s network.Stream, chain *blockchain.BlockChain) {
 	defer s.Close()
 
-	// Receive the height from requester
-	decoder := gob.NewDecoder(s)
-	var heightData map[string]any
-	if err := decoder.Decode(&heightData); err != nil {
-		log.Printf("[NETWORK] Error decoding height request: %v", err)
+	// Receive the height from requester with length prefix
+	reader := bufio.NewReader(s)
+	lenBuf := make([]byte, 4)
+	_, err := reader.Read(lenBuf)
+	if err != nil {
+		log.Printf("[NETWORK] Error reading height length from stream: %v", err)
 		return
 	}
 
-	requestedHeight, ok := heightData["height"].(int)
-	if !ok {
-		log.Printf("[NETWORK] Invalid height data received")
+	messageLen := binary.BigEndian.Uint32(lenBuf)
+	buf := make([]byte, messageLen)
+	_, err = reader.Read(buf)
+	if err != nil {
+		log.Printf("[NETWORK] Error reading height data from stream: %v", err)
 		return
 	}
+
+	// Unmarshal height data using protobuf
+	heightData := &protobuf.HeightData{}
+	err = proto.Unmarshal(buf, heightData)
+	if err != nil {
+		log.Printf("[NETWORK] Error unmarshaling height data: %v", err)
+		return
+	}
+	requestedHeight := int(heightData.Height)
 
 	log.Printf("[NETWORK] Peer %s requesting blocks after height %d", s.Conn().RemotePeer(), requestedHeight)
 
@@ -100,10 +113,8 @@ func HandleGetBlocksRequest(s network.Stream, chain *blockchain.BlockChain) {
 
 	log.Printf("[NETWORK] Sending %d blocks (after height %d) to peer %s", len(blocksToSend), requestedHeight, s.Conn().RemotePeer())
 
-	encoder := gob.NewEncoder(s)
-
 	// Send filtered blocks
-	if err := SendBlocks(encoder, blocksToSend, chain.GetBlock); err != nil {
+	if err := SendBlocks(s, blocksToSend, chain.GetBlock); err != nil {
 		log.Printf("[NETWORK] Error sending blocks: %v", err)
 		return
 	}
@@ -112,7 +123,7 @@ func HandleGetBlocksRequest(s network.Stream, chain *blockchain.BlockChain) {
 }
 
 // HandleGetVersionRequest responds to version requests with local blockchain info
-func HandleGetVersionRequest(s network.Stream, chain *blockchain.BlockChain, nodeID string) {
+func HandleGetVersionRequest(h host.Host, s network.Stream, chain *blockchain.BlockChain, nodeID string) {
 	defer s.Close()
 
 	height := chain.GetBestHeight()
@@ -120,15 +131,36 @@ func HandleGetVersionRequest(s network.Stream, chain *blockchain.BlockChain, nod
 
 	log.Printf("[NETWORK] Sending version info to %s (height: %d)", s.Conn().RemotePeer(), height)
 
-	encoder := gob.NewEncoder(s)
-	versionData := map[string]any{
-		"height":   height,
-		"lastHash": lastHash,
-		"nodeID":   nodeID,
+	versionData := &protobuf.VersionData{
+		Height:   int32(height),
+		NodeId:   nodeID,
+		LastHash: lastHash,
 	}
 
-	if err := encoder.Encode(versionData); err != nil {
+	data, err := proto.Marshal(versionData)
+	if err != nil {
+		log.Printf("[NETWORK] Error marshaling version info: %v", err)
+		return
+	}
+
+	writer := bufio.NewWriter(s)
+
+	// Send length-prefixed version data
+	lenBuf := make([]byte, 4)
+	binary.BigEndian.PutUint32(lenBuf, uint32(len(data)))
+	if _, err := writer.Write(lenBuf); err != nil {
+		log.Printf("[NETWORK] Error sending version info length: %v", err)
+		return
+	}
+
+	if _, err := writer.Write(data); err != nil {
 		log.Printf("[NETWORK] Error sending version info: %v", err)
+		return
+	}
+
+	if err := writer.Flush(); err != nil {
+		log.Printf("[NETWORK] Error flushing version info: %v", err)
+		return
 	}
 }
 
@@ -152,66 +184,182 @@ func HandleSendContractRequest(node host.Host, contract *blockchain.Contract) {
 		}
 		defer stream.Close()
 
-		encoder := gob.NewEncoder(stream)
 		if err := SendCommand(stream, "NEW_CONTRACT"); err != nil {
 			log.Printf("[NETWORK] Error sending command to %s: %v", peerID, err)
 			continue
 		}
 
-		contractData := map[string]any{
-			"contract": contract,
+		contractData := &protobuf.Contract{
+			Id:             contract.ID,
+			Title:          contract.Title,
+			Description:    contract.Description,
+			CreatorAddress: contract.CreatorAddress,
+			Attachments:    contract.Attachments,
+			Terms:          contract.Terms,
+			Status:         string(contract.Status),
+			CreatedAt:      contract.CreatedAt,
+			UpdatedAt:      contract.UpdatedAt,
+			Milestones:     []*protobuf.Milestone{},
+			Parties:        []*protobuf.Party{},
 		}
 
-		if err := encoder.Encode(contractData); err != nil {
-			log.Printf("[NETWORK] Error sending contract to %s: %v", peerID, err)
+		for _, m := range contract.Milestones {
+			protoMilestone := &protobuf.Milestone{
+				Id:          m.ID,
+				Title:       m.Title,
+				Description: m.Description,
+				Value:       int32(m.Value),
+				DueDate:     m.DueDate,
+				Status:      string(m.Status),
+				CreatedAt:   m.CreatedAt,
+				CompletedAt: m.CompletedAt,
+				Evidence:    m.Evidence,
+				ApprovedBy:  m.ApprovedBy,
+			}
+			contractData.Milestones = append(contractData.Milestones, protoMilestone)
+		}
+
+		for _, p := range contract.Parties {
+			protoParty := &protobuf.Party{
+				Address:   p.Address,
+				Role:      string(p.Role),
+				PublicKey: p.PublicKey,
+				Signature: p.Signature,
+			}
+			contractData.Parties = append(contractData.Parties, protoParty)
+		}
+
+		if data, err := proto.Marshal(contractData); err != nil {
+			log.Printf("[NETWORK] Error marshaling contract data to %s: %v", peerID, err)
+			continue
 		} else {
+			// Send length-prefixed contract data
+			writer := bufio.NewWriter(stream)
+			lenBuf := make([]byte, 4)
+			binary.BigEndian.PutUint32(lenBuf, uint32(len(data)))
+			if _, err := writer.Write(lenBuf); err != nil {
+				log.Printf("[NETWORK] Error sending contract length to %s: %v", peerID, err)
+				continue
+			}
+
+			if _, err := writer.Write(data); err != nil {
+				log.Printf("[NETWORK] Error sending contract data to %s: %v", peerID, err)
+				continue
+			}
+
+			if err := writer.Flush(); err != nil {
+				log.Printf("[NETWORK] Error flushing contract data to %s: %v", peerID, err)
+				continue
+			}
+
 			log.Printf("[NETWORK] Sent new contract to peer %s", peerID)
 		}
 	}
 }
 
-func HandleReceiveContractRequest(s network.Stream, node host.Host, chain *blockchain.BlockChain) {
+func HandleReceiveContractRequest(h host.Host, s network.Stream, chain *blockchain.BlockChain) {
 	defer s.Close()
 
-	decoder := gob.NewDecoder(s)
-	var contractData map[string]any
-	if err := decoder.Decode(&contractData); err != nil {
-		log.Printf("[NETWORK] Error decoding contract data: %v", err)
+	// Read length-prefixed contract data
+	reader := bufio.NewReader(s)
+	lenBuf := make([]byte, 4)
+	_, err := reader.Read(lenBuf)
+	if err != nil {
+		log.Printf("[NETWORK] Error reading contract length from stream: %v", err)
 		return
 	}
 
-	contract, ok := contractData["contract"].(*blockchain.Contract)
-	if !ok {
-		log.Printf("[NETWORK] Invalid contract data received")
+	messageLen := binary.BigEndian.Uint32(lenBuf)
+	buf := make([]byte, messageLen)
+	_, err = reader.Read(buf)
+	if err != nil {
+		log.Printf("[NETWORK] Error reading contract data from stream: %v", err)
 		return
 	}
-	log.Printf("[NETWORK] Received new contract ID %x from peer %s", contract.ID, s.Conn().RemotePeer())
+
+	contract := &protobuf.Contract{}
+	if err := proto.Unmarshal(buf, contract); err != nil {
+		log.Printf("[NETWORK] Error unmarshaling contract data: %v", err)
+		return
+	}
+
+	log.Printf("[NETWORK] Received new contract ID %x from peer %s", contract.Id, s.Conn().RemotePeer())
 
 	// Add contract to blockchain
-	cts := []*blockchain.Contract{contract}
-	block := chain.MineBlock(nil, cts)
-	log.Printf("[NETWORK] New contract ID %x included in block %x", contract.ID, block.Hash)
+	ct := &blockchain.Contract{
+		ID:             contract.Id,
+		Title:          contract.Title,
+		Description:    contract.Description,
+		CreatorAddress: contract.CreatorAddress,
+		Attachments:    contract.Attachments,
+		Terms:          contract.Terms,
+		Status:         blockchain.ContractStatus(contract.Status),
+		CreatedAt:      contract.CreatedAt,
+		UpdatedAt:      contract.UpdatedAt,
+		Milestones:     []*blockchain.Milestone{},
+		Parties:        []*blockchain.Party{},
+	}
+
+	for _, protoM := range contract.Milestones {
+		m := &blockchain.Milestone{
+			ID:          protoM.Id,
+			Title:       protoM.Title,
+			Description: protoM.Description,
+			Value:       int(protoM.Value),
+			DueDate:     protoM.DueDate,
+			Status:      blockchain.MilestoneStatus(protoM.Status),
+			CreatedAt:   protoM.CreatedAt,
+			CompletedAt: protoM.CompletedAt,
+			Evidence:    protoM.Evidence,
+			ApprovedBy:  protoM.ApprovedBy,
+		}
+		ct.Milestones = append(ct.Milestones, m)
+	}
+
+	for _, protoP := range contract.Parties {
+		p := &blockchain.Party{
+			Address:   protoP.Address,
+			Role:      blockchain.ContractRole(protoP.Role),
+			PublicKey: protoP.PublicKey,
+			Signature: protoP.Signature,
+		}
+		ct.Parties = append(ct.Parties, p)
+	}
+
+	block := chain.MineBlock(nil, []*blockchain.Contract{ct})
+	log.Printf("[NETWORK] New contract ID %x included in block %x", contract.Id, block.Hash)
 
 	// Broadcast new block to all peers using dedicated function
-	BroadcastBlock(node, block)
+	BroadcastBlock(h, block)
 }
 
-func HandleReceiveNewBlockRequest(s network.Stream, chain *blockchain.BlockChain) {
+func HandleReceiveNewBlockRequest(h host.Host, s network.Stream, chain *blockchain.BlockChain) {
+	defer s.Close()
 
-	decoder := gob.NewDecoder(s)
-	var blockData map[string]any
-	if err := decoder.Decode(&blockData); err != nil {
-		log.Printf("[NETWORK] Error decoding new block data: %v", err)
+	// Read length-prefixed block data
+	reader := bufio.NewReader(s)
+	lenBuf := make([]byte, 4)
+	_, err := reader.Read(lenBuf)
+	if err != nil {
+		log.Printf("[NETWORK] Error reading new block length from stream: %v", err)
 		return
 	}
 
-	serializedBlock, ok := blockData["data"].([]byte)
-	if !ok {
-		log.Printf("[NETWORK] Invalid block data received")
+	messageLen := binary.BigEndian.Uint32(lenBuf)
+	buf := make([]byte, messageLen)
+	_, err = reader.Read(buf)
+	if err != nil {
+		log.Printf("[NETWORK] Error reading new block data from stream: %v", err)
 		return
 	}
 
-	block := blockchain.DeserializeBlock(serializedBlock)
+	blockDataProto := &protobuf.BlockData{}
+	if err := proto.Unmarshal(buf, blockDataProto); err != nil {
+		log.Printf("[NETWORK] Error unmarshaling new block data: %v", err)
+		return
+	}
+
+	block := blockchain.DeserializeBlock(blockDataProto.Data)
 	if block == nil {
 		log.Printf("[NETWORK] Failed to deserialize received block")
 		return
@@ -224,6 +372,4 @@ func HandleReceiveNewBlockRequest(s network.Stream, chain *blockchain.BlockChain
 	}
 
 	log.Printf("[NETWORK] New block %x added to blockchain from peer %s", block.Hash, s.Conn().RemotePeer())
-
-	s.Close()
 }

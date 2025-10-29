@@ -253,6 +253,13 @@ func (blockchain *BlockChain) AddBlock(block *Block) error {
 	err = db.Apply(batch, &pebble.WriteOptions{Sync: true})
 	Handle(err)
 
+	// Update UTXO set and ICCT set for received blocks
+	utxoSet := UTXOSet{blockchain}
+	utxoSet.Update(block)
+
+	icctSet := ICCTSet{blockchain}
+	icctSet.Update(block)
+
 	return nil
 }
 

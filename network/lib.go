@@ -2,27 +2,24 @@
 package network
 
 import (
+	"bufio"
 	"context"
-	"encoding/gob"
+	"encoding/binary"
 	"fmt"
 	"log"
 	"strings"
 
 	"github.com/codila125/foedus-blockchain/blockchain"
 	"github.com/codila125/foedus-blockchain/database"
+	"github.com/codila125/foedus-blockchain/protobuf"
 	"github.com/libp2p/go-libp2p/core/host"
 	network "github.com/libp2p/go-libp2p/core/network"
 	peerstore "github.com/libp2p/go-libp2p/core/peer"
 	protocolpkg "github.com/libp2p/go-libp2p/core/protocol"
+	"google.golang.org/protobuf/proto"
 )
 
 const protocolID = "/foedus/1.0.0"
-
-func init() {
-	// Register types for gob encoding/decoding
-	gob.Register(&blockchain.Contract{})
-	gob.Register(&blockchain.Block{})
-}
 
 // PrintNodeID logs the node's unique identifier
 func PrintNodeID(host host.Host) {
@@ -56,28 +53,49 @@ func SendCommand(stream network.Stream, command string) error {
 }
 
 // ReceiveBlocks decodes and processes blocks from a stream
-func ReceiveBlocks(decoder *gob.Decoder, processBlock func([]byte, *blockchain.Block) error) (int, []byte, int, error) {
+func ReceiveBlocks(stream network.Stream, processBlock func([]byte, *blockchain.Block) error) (int, []byte, int, error) {
 	var blockCount int
 	var lastHash []byte
 	var maxHeight int
 
+	reader := bufio.NewReader(stream)
+
 	for {
-		var blockData map[string]any
-		if err := decoder.Decode(&blockData); err != nil {
+		// Read length prefix (4 bytes, big-endian)
+		lenBuf := make([]byte, 4)
+		_, err := reader.Read(lenBuf)
+		if err != nil {
 			if strings.Contains(err.Error(), "EOF") {
 				break
 			}
+			return blockCount, lastHash, maxHeight, fmt.Errorf("failed to read message length: %w", err)
+		}
+
+		messageLen := binary.BigEndian.Uint32(lenBuf)
+
+		// Read the actual message
+		buf := make([]byte, messageLen)
+		_, err = reader.Read(buf)
+		if err != nil {
+			if strings.Contains(err.Error(), "EOF") {
+				break
+			}
+			return blockCount, lastHash, maxHeight, fmt.Errorf("failed to read message data: %w", err)
+		}
+
+		blockDataProto := &protobuf.BlockData{}
+		if err := proto.Unmarshal(buf, blockDataProto); err != nil {
 			return blockCount, lastHash, maxHeight, fmt.Errorf("failed to decode block: %w", err)
 		}
 
 		// Check for completion signal
-		if cmd, ok := blockData["command"].(string); ok && cmd == "done" {
+		if cmd := blockDataProto.Command; cmd == "done" {
 			break
 		}
 
 		// Extract block
-		serializedBlock, ok := blockData["data"].([]byte)
-		if !ok {
+		serializedBlock := blockDataProto.Data
+		if serializedBlock == nil {
 			log.Printf("[NETWORK] Invalid block data format, skipping")
 			continue
 		}
@@ -109,8 +127,10 @@ func ReceiveBlocks(decoder *gob.Decoder, processBlock func([]byte, *blockchain.B
 	return blockCount, lastHash, maxHeight, nil
 }
 
-// SendBlocks encodes and sends blocks over a stream
-func SendBlocks(encoder *gob.Encoder, blockHashes [][]byte, getBlock func([]byte) (blockchain.Block, error)) error {
+// SendBlocks encodes and sends blocks over an existing stream
+func SendBlocks(stream network.Stream, blockHashes [][]byte, getBlock func([]byte) (blockchain.Block, error)) error {
+	writer := bufio.NewWriter(stream)
+
 	for _, hash := range blockHashes {
 		block, err := getBlock(hash)
 		if err != nil {
@@ -118,21 +138,52 @@ func SendBlocks(encoder *gob.Encoder, blockHashes [][]byte, getBlock func([]byte
 			continue
 		}
 
-		blockData := map[string]any{
-			"command": "NEW_BLOCK",
-			"hash":    block.Hash,
-			"height":  block.Height,
-			"data":    block.SerializeBlock(),
+		blockData := &protobuf.BlockData{
+			Command: "NEW_BLOCK",
+			Hash:    block.Hash,
+			Height:  int32(block.Height),
+			Data:    block.SerializeBlock(),
 		}
 
-		if err := encoder.Encode(blockData); err != nil {
-			return fmt.Errorf("failed to encode block: %w", err)
+		data, err := proto.Marshal(blockData)
+		if err != nil {
+			return fmt.Errorf("failed to marshal block: %w", err)
+		}
+
+		// Send length-prefixed block data
+		lenBuf := make([]byte, 4)
+		binary.BigEndian.PutUint32(lenBuf, uint32(len(data)))
+		if _, err := writer.Write(lenBuf); err != nil {
+			return fmt.Errorf("failed to send block length: %w", err)
+		}
+
+		if _, err := writer.Write(data); err != nil {
+			return fmt.Errorf("failed to send block data: %w", err)
 		}
 	}
 
 	// Send completion signal
-	if err := encoder.Encode(map[string]any{"command": "done"}); err != nil {
-		return fmt.Errorf("failed to send completion signal: %w", err)
+	doneData := &protobuf.BlockData{
+		Command: "done",
+	}
+
+	data, err := proto.Marshal(doneData)
+	if err != nil {
+		return fmt.Errorf("failed to marshal done signal: %w", err)
+	}
+
+	lenBuf := make([]byte, 4)
+	binary.BigEndian.PutUint32(lenBuf, uint32(len(data)))
+	if _, err := writer.Write(lenBuf); err != nil {
+		return fmt.Errorf("failed to send done signal length: %w", err)
+	}
+
+	if _, err := writer.Write(data); err != nil {
+		return fmt.Errorf("failed to send done signal: %w", err)
+	}
+
+	if err := writer.Flush(); err != nil {
+		return fmt.Errorf("failed to flush writer: %w", err)
 	}
 
 	return nil
@@ -176,8 +227,7 @@ func GetBlockchain(node host.Host, peerID peerstore.ID, nodeID string) error {
 	}
 
 	// Receive and store blocks
-	decoder := gob.NewDecoder(stream)
-	blockCount, lastHash, maxHeight, err := ReceiveBlocks(decoder, processBlock)
+	blockCount, lastHash, maxHeight, err := ReceiveBlocks(stream, processBlock)
 	if err != nil {
 		return err
 	}
@@ -247,26 +297,39 @@ func RequestVersionFromPeers(node host.Host, chain *blockchain.BlockChain) map[p
 			continue
 		}
 
-		// Receive version response
-		decoder := gob.NewDecoder(stream)
-		var versionData map[string]any
-		if err := decoder.Decode(&versionData); err != nil {
-			log.Printf("[NETWORK] Error decoding version from %s: %v", peerID, err)
+		// Receive version response with length prefix
+		reader := bufio.NewReader(stream)
+		lenBuf := make([]byte, 4)
+		_, err = reader.Read(lenBuf)
+		if err != nil {
+			log.Printf("[NETWORK] Error reading version length from %s: %v", peerID, err)
 			stream.Close()
 			continue
 		}
 
-		height, ok1 := versionData["height"].(int)
-		lastHash, ok2 := versionData["lastHash"].([]byte)
-		nodeID, ok3 := versionData["nodeID"].(string)
+		messageLen := binary.BigEndian.Uint32(lenBuf)
+		buf := make([]byte, messageLen)
+		_, err = reader.Read(buf)
+		if err != nil {
+			log.Printf("[NETWORK] Error reading version data from %s: %v", peerID, err)
+			stream.Close()
+			continue
+		}
 
-		if ok1 && ok2 && ok3 {
+		versionDataProto := &protobuf.VersionData{}
+		if err := proto.Unmarshal(buf, versionDataProto); err != nil {
+			log.Printf("[NETWORK] Error unmarshaling version data from %s: %v", peerID, err)
+			stream.Close()
+			continue
+		}
+
+		if versionDataProto.LastHash != nil && versionDataProto.NodeId != "" {
 			versions[peerID] = VersionInfo{
-				BestHeight: height,
-				LastHash:   lastHash,
-				NodeID:     nodeID,
+				BestHeight: int(versionDataProto.Height),
+				LastHash:   versionDataProto.LastHash,
+				NodeID:     versionDataProto.NodeId,
 			}
-			log.Printf("[NETWORK] ✓ Peer %s version: height=%d, node=%s", peerID, height, nodeID)
+			log.Printf("[NETWORK] ✓ Peer %s version: height=%d, node=%s", peerID, versionDataProto.Height, versionDataProto.NodeId)
 		}
 
 		stream.Close()
@@ -334,39 +397,69 @@ func SyncMissingBlocks(node host.Host, peerID peerstore.ID, chain *blockchain.Bl
 	}
 
 	// Send our current height so peer knows what to send
-	encoder := gob.NewEncoder(stream)
-	heightData := map[string]any{
-		"height": localHeight,
+	heightData := &protobuf.HeightData{
+		Height: int32(localHeight),
 	}
-	if err := encoder.Encode(heightData); err != nil {
-		return fmt.Errorf("failed to send height: %w", err)
+
+	protoData, err := proto.Marshal(heightData)
+	if err != nil {
+		return fmt.Errorf("failed to marshal height data: %w", err)
+	}
+
+	// Send length-prefixed height data
+	writer := bufio.NewWriter(stream)
+	lenBuf := make([]byte, 4)
+	binary.BigEndian.PutUint32(lenBuf, uint32(len(protoData)))
+	if _, err := writer.Write(lenBuf); err != nil {
+		return fmt.Errorf("failed to send height length: %w", err)
+	}
+
+	if _, err := writer.Write(protoData); err != nil {
+		return fmt.Errorf("failed to send height data: %w", err)
+	}
+
+	if err := writer.Flush(); err != nil {
+		return fmt.Errorf("failed to flush height data: %w", err)
 	}
 
 	// Receive only missing blocks
-	decoder := gob.NewDecoder(stream)
 	var newBlocksAdded int
+	blockReader := bufio.NewReader(stream)
 
 	for {
-		var blockData map[string]any
-		if err := decoder.Decode(&blockData); err != nil {
+		// Read length prefix (4 bytes, big-endian)
+		lenBuf := make([]byte, 4)
+		_, err := blockReader.Read(lenBuf)
+		if err != nil {
 			if strings.Contains(err.Error(), "EOF") {
 				break
 			}
+			return fmt.Errorf("failed to read block message length: %w", err)
+		}
+
+		messageLen := binary.BigEndian.Uint32(lenBuf)
+
+		// Read the actual block message
+		buf := make([]byte, messageLen)
+		_, err = blockReader.Read(buf)
+		if err != nil {
+			if strings.Contains(err.Error(), "EOF") {
+				break
+			}
+			return fmt.Errorf("failed to read block message data: %w", err)
+		}
+
+		blockDataProto := &protobuf.BlockData{}
+		if err := proto.Unmarshal(buf, blockDataProto); err != nil {
 			return fmt.Errorf("failed to decode block: %w", err)
 		}
 
 		// Check for completion signal
-		if cmd, ok := blockData["command"].(string); ok && cmd == "done" {
+		if cmd := blockDataProto.Command; cmd == "done" {
 			break
 		}
 
-		// Extract block
-		serializedBlock, ok := blockData["data"].([]byte)
-		if !ok {
-			continue
-		}
-
-		block := blockchain.DeserializeBlock(serializedBlock)
+		block := blockchain.DeserializeBlock(blockDataProto.Data)
 		if block == nil {
 			continue
 		}
@@ -426,15 +519,39 @@ func BroadcastBlock(node host.Host, block *blockchain.Block) {
 			continue
 		}
 
-		encoder := gob.NewEncoder(stream)
-		blockData := map[string]any{
-			"data": block.SerializeBlock(),
+		// Wrap block in BlockData protobuf message
+		blockDataProto := &protobuf.BlockData{
+			Command: "NEW_BLOCK",
+			Hash:    block.Hash,
+			Height:  int32(block.Height),
+			Data:    block.SerializeBlock(),
 		}
 
-		if err := encoder.Encode(blockData); err != nil {
-			log.Printf("[NETWORK] Error broadcasting block to %s: %v", peerID, err)
-		} else {
-			log.Printf("[NETWORK] ✓ Broadcasted new block %x to peer %s", block.Hash, peerID)
+		data, err := proto.Marshal(blockDataProto)
+		if err != nil {
+			log.Printf("[NETWORK] Error marshaling block data: %v", err)
+			continue
 		}
+
+		// Send length-prefixed block data
+		writer := bufio.NewWriter(stream)
+		lenBuf := make([]byte, 4)
+		binary.BigEndian.PutUint32(lenBuf, uint32(len(data)))
+		if _, err := writer.Write(lenBuf); err != nil {
+			log.Printf("[NETWORK] Error sending block length to %s: %v", peerID, err)
+			continue
+		}
+
+		if _, err := writer.Write(data); err != nil {
+			log.Printf("[NETWORK] Error broadcasting block to %s: %v", peerID, err)
+			continue
+		}
+
+		if err := writer.Flush(); err != nil {
+			log.Printf("[NETWORK] Error flushing block data to %s: %v", peerID, err)
+			continue
+		}
+
+		log.Printf("[NETWORK] ✓ Broadcasted new block %x to peer %s", block.Hash, peerID)
 	}
 }
