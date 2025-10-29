@@ -3,6 +3,7 @@ package network
 import (
 	"bufio"
 	"encoding/binary"
+	"io"
 	"log"
 
 	"github.com/codila125/foedus-blockchain/blockchain"
@@ -69,7 +70,7 @@ func HandleGetBlocksRequest(h host.Host, s network.Stream, chain *blockchain.Blo
 	// Receive the height from requester with length prefix
 	reader := bufio.NewReader(s)
 	lenBuf := make([]byte, 4)
-	_, err := reader.Read(lenBuf)
+	_, err := io.ReadFull(reader, lenBuf)
 	if err != nil {
 		log.Printf("[NETWORK] Error reading height length from stream: %v", err)
 		return
@@ -77,7 +78,7 @@ func HandleGetBlocksRequest(h host.Host, s network.Stream, chain *blockchain.Blo
 
 	messageLen := binary.BigEndian.Uint32(lenBuf)
 	buf := make([]byte, messageLen)
-	_, err = reader.Read(buf)
+	_, err = io.ReadFull(reader, buf)
 	if err != nil {
 		log.Printf("[NETWORK] Error reading height data from stream: %v", err)
 		return
@@ -263,7 +264,7 @@ func HandleReceiveContractRequest(h host.Host, s network.Stream, chain *blockcha
 	// Read length-prefixed contract data
 	reader := bufio.NewReader(s)
 	lenBuf := make([]byte, 4)
-	_, err := reader.Read(lenBuf)
+	_, err := io.ReadFull(reader, lenBuf)
 	if err != nil {
 		log.Printf("[NETWORK] Error reading contract length from stream: %v", err)
 		return
@@ -271,7 +272,7 @@ func HandleReceiveContractRequest(h host.Host, s network.Stream, chain *blockcha
 
 	messageLen := binary.BigEndian.Uint32(lenBuf)
 	buf := make([]byte, messageLen)
-	_, err = reader.Read(buf)
+	_, err = io.ReadFull(reader, buf)
 	if err != nil {
 		log.Printf("[NETWORK] Error reading contract data from stream: %v", err)
 		return
@@ -339,7 +340,7 @@ func HandleReceiveNewBlockRequest(h host.Host, s network.Stream, chain *blockcha
 	// Read length-prefixed block data
 	reader := bufio.NewReader(s)
 	lenBuf := make([]byte, 4)
-	_, err := reader.Read(lenBuf)
+	_, err := io.ReadFull(reader, lenBuf)
 	if err != nil {
 		log.Printf("[NETWORK] Error reading new block length from stream: %v", err)
 		return
@@ -347,7 +348,7 @@ func HandleReceiveNewBlockRequest(h host.Host, s network.Stream, chain *blockcha
 
 	messageLen := binary.BigEndian.Uint32(lenBuf)
 	buf := make([]byte, messageLen)
-	_, err = reader.Read(buf)
+	_, err = io.ReadFull(reader, buf)
 	if err != nil {
 		log.Printf("[NETWORK] Error reading new block data from stream: %v", err)
 		return

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"log"
 	"strings"
 
@@ -63,9 +64,9 @@ func ReceiveBlocks(stream network.Stream, processBlock func([]byte, *blockchain.
 	for {
 		// Read length prefix (4 bytes, big-endian)
 		lenBuf := make([]byte, 4)
-		_, err := reader.Read(lenBuf)
+		_, err := io.ReadFull(reader, lenBuf)
 		if err != nil {
-			if strings.Contains(err.Error(), "EOF") {
+			if err == io.EOF || err == io.ErrUnexpectedEOF {
 				break
 			}
 			return blockCount, lastHash, maxHeight, fmt.Errorf("failed to read message length: %w", err)
@@ -75,9 +76,9 @@ func ReceiveBlocks(stream network.Stream, processBlock func([]byte, *blockchain.
 
 		// Read the actual message
 		buf := make([]byte, messageLen)
-		_, err = reader.Read(buf)
+		_, err = io.ReadFull(reader, buf)
 		if err != nil {
-			if strings.Contains(err.Error(), "EOF") {
+			if err == io.EOF || err == io.ErrUnexpectedEOF {
 				break
 			}
 			return blockCount, lastHash, maxHeight, fmt.Errorf("failed to read message data: %w", err)
@@ -300,7 +301,7 @@ func RequestVersionFromPeers(node host.Host, chain *blockchain.BlockChain) map[p
 		// Receive version response with length prefix
 		reader := bufio.NewReader(stream)
 		lenBuf := make([]byte, 4)
-		_, err = reader.Read(lenBuf)
+		_, err = io.ReadFull(reader, lenBuf)
 		if err != nil {
 			log.Printf("[NETWORK] Error reading version length from %s: %v", peerID, err)
 			stream.Close()
@@ -309,7 +310,7 @@ func RequestVersionFromPeers(node host.Host, chain *blockchain.BlockChain) map[p
 
 		messageLen := binary.BigEndian.Uint32(lenBuf)
 		buf := make([]byte, messageLen)
-		_, err = reader.Read(buf)
+		_, err = io.ReadFull(reader, buf)
 		if err != nil {
 			log.Printf("[NETWORK] Error reading version data from %s: %v", peerID, err)
 			stream.Close()
@@ -429,9 +430,9 @@ func SyncMissingBlocks(node host.Host, peerID peerstore.ID, chain *blockchain.Bl
 	for {
 		// Read length prefix (4 bytes, big-endian)
 		lenBuf := make([]byte, 4)
-		_, err := blockReader.Read(lenBuf)
+		_, err := io.ReadFull(blockReader, lenBuf)
 		if err != nil {
-			if strings.Contains(err.Error(), "EOF") {
+			if err == io.EOF || err == io.ErrUnexpectedEOF {
 				break
 			}
 			return fmt.Errorf("failed to read block message length: %w", err)
@@ -441,9 +442,9 @@ func SyncMissingBlocks(node host.Host, peerID peerstore.ID, chain *blockchain.Bl
 
 		// Read the actual block message
 		buf := make([]byte, messageLen)
-		_, err = blockReader.Read(buf)
+		_, err = io.ReadFull(blockReader, buf)
 		if err != nil {
-			if strings.Contains(err.Error(), "EOF") {
+			if err == io.EOF || err == io.ErrUnexpectedEOF {
 				break
 			}
 			return fmt.Errorf("failed to read block message data: %w", err)
