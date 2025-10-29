@@ -18,7 +18,7 @@ Foedus is a decentralized blockchain platform designed for secure, trustless pro
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                     Application Layer                    │
+│                     Application Layer                   │
 │  ┌──────────────┐              ┌──────────────────────┐ │
 │  │   CLI Mode   │              │   API Server Mode    │ │
 │  │  (commands)  │              │  (HTTP endpoints)    │ │
@@ -26,19 +26,19 @@ Foedus is a decentralized blockchain platform designed for secure, trustless pro
 └───────────────────────┬─────────────────────────────────┘
                         │
 ┌───────────────────────┴─────────────────────────────────┐
-│                   Blockchain Core                        │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐ │
-│  │   Wallet    │  │ Blockchain  │  │  Smart Contract │ │
-│  │  (Ed25519)  │  │ (UTXO/PoW)  │  │   (Milestones)  │ │
-│  └─────────────┘  └─────────────┘  └─────────────────┘ │
+│                   Blockchain Core                       │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐  │
+│  │   Wallet    │  │ Blockchain  │  │  Smart Contract │  │
+│  │  (Ed25519)  │  │ (UTXO/PoW)  │  │   (Milestones)  │  │
+│  └─────────────┘  └─────────────┘  └─────────────────┘  │
 └───────────────────────┬─────────────────────────────────┘
                         │
 ┌───────────────────────┴─────────────────────────────────┐
-│               Infrastructure Layer                       │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐ │
-│  │   Network   │  │  Database   │  │  Merkle Tree    │ │
-│  │  (libp2p)   │  │  (PebbleDB) │  │  (SHA-256)      │ │
-│  └─────────────┘  └─────────────┘  └─────────────────┘ │
+│               Infrastructure Layer                      │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐  │
+│  │   Network   │  │  Database   │  │  Merkle Tree    │  │
+│  │  (libp2p)   │  │  (PebbleDB) │  │  (SHA-256)      │  │
+│  └─────────────┘  └─────────────┘  └─────────────────┘  │
 └─────────────────────────────────────────────────────────┘
 ```
 
