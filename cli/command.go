@@ -200,6 +200,6 @@ func (cli *CommandLine) reindex(nodeID string) {
 // startNode launches a new node and connects it to the blockchain network.
 // It can optionally start in mining mode, which allows the node to create
 // new blocks and earn rewards, sent to the specified miner address.
-func (cli *CommandLine) startNode(nodeID string, minerAddress string) {
-	network.RunMinerNode(nodeID, minerAddress)
+func (cli *CommandLine) startNode(nodeID string, sourceAddress string) {
+	network.RunMinerNode(nodeID, sourceAddress)
 }
