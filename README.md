@@ -1,5 +1,9 @@
 # Foedus Blockchain
 
+![Cover](images/cover-template.png)
+
+[![Go Version](https://img.shields.io/badge/go-1.25.1+-blue.svg)](https://golang.org) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![PebbleDB](https://img.shields.io/badge/PebbleDB-green.svg)](https://github.com/cockroachdb/pebble) [![libp2p](https://img.shields.io/badge/libp2p-purple.svg)](https://github.com/libp2p/go-libp2p) [![Chi](https://img.shields.io/badge/Chi-red.svg)](https://github.com/go-chi/chi) [![Protocol Buffers](https://img.shields.io/badge/Protocol%20Buffers-orange.svg)](https://protobuf.dev/)
+
 A production-ready blockchain implementation in Go featuring UTXO transaction model, Proof-of-Work consensus, milestone-based smart contracts, and peer-to-peer networking.
 
 ## Overview
@@ -188,11 +192,3 @@ go test ./...
 - **Networking**: libp2p with TCP transport (ports 8006/8007)
 - **Serialization**: Protocol Buffers v3
 - **Address Format**: Base58Check with 4-byte checksum
-
-## License
-
-MIT License - see [LICENSE](LICENSE) for details.
-
----
-
-Built with [PebbleDB](https://github.com/cockroachdb/pebble), [libp2p](https://github.com/libp2p/go-libp2p), [Chi](https://github.com/go-chi/chi), and [Protocol Buffers](https://protobuf.dev/)
