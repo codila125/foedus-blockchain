@@ -110,9 +110,9 @@ start_miner_node() {
 }
 
 start_log_streams() {
-  tail -F "$SOURCE_LOG" &
+  tail -n +1 -f "$SOURCE_LOG" &
   SOURCE_TAIL_PID=$!
-  tail -F "$MINER_LOG" &
+  tail -n +1 -f "$MINER_LOG" &
   MINER_TAIL_PID=$!
 }
 

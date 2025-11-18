@@ -4,7 +4,7 @@
 
 [![Go Version](https://img.shields.io/badge/go-1.25.1+-blue.svg)](https://golang.org) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![PebbleDB](https://img.shields.io/badge/PebbleDB-green.svg)](https://github.com/cockroachdb/pebble) [![libp2p](https://img.shields.io/badge/libp2p-purple.svg)](https://github.com/libp2p/go-libp2p) [![Chi](https://img.shields.io/badge/Chi-red.svg)](https://github.com/go-chi/chi) [![Protocol Buffers](https://img.shields.io/badge/Protocol%20Buffers-orange.svg)](https://protobuf.dev/)
 
-A production-ready blockchain implementation in Go featuring UTXO transaction model, Proof-of-Work consensus, milestone-based smart contracts, and peer-to-peer networking.
+A educational purpose blockchain implementation in Go featuring UTXO transaction model, Proof-of-Work consensus, milestone-based smart contracts, and peer-to-peer networking.
 
 ## Overview
 
@@ -113,11 +113,29 @@ docker build -t foedus-blockchain .
 ```bash
 docker run --rm -p 3000:3000 -p 8006:8006 -p 8007:8007 foedus-blockchain
 ```
+> **Note:** The image declares `VOLUME /app/temp` and `VOLUME /var/log/foedus`, so Docker automatically creates anonymous volumes the first time the container runs. Those volumes stick around only while the container exists. If you want persistence without naming the volumes yourself, simply drop `--rm` and restart the same container ID:
+> ```bash
+> docker run -d --name foedus -p 3000:3000 -p 8006:8006 -p 8007:8007 foedus-blockchain
+> # later
+> docker stop foedus
+> docker start foedus
+> ```
+> Removing the container (`docker rm foedus`) also deletes its anonymous volumes, so use named volumes if you need to recreate containers frequently.
+
+### Run with explicit persistent volumes
+```bash
+docker volume create foedus-data
+docker volume create foedus-logs
+docker run --rm \
+  -p 3000:3000 -p 8006:8006 -p 8007:8007 \
+  -v foedus-data:/app/temp \
+  -v foedus-logs:/var/log/foedus \
+  foedus-blockchain
+```
 
 Container logs stream from `/var/log/foedus/source.log` and `/var/log/foedus/miner.log`, so `docker logs -f <container>` shows both servers plus bootstrap progress. The API remains available on `http://localhost:3000`, while libp2p peers can dial the exposed 8006/8007 ports.
 
 **Customization tips:**
-- Persist state by mounting a volume: `-v foedus-data:/app/temp`.
 - Override defaults with env vars, e.g. `-e SOURCE_NODE_ID=4000 -e MINER_NODE_ID=4001 -e SOURCE_WAIT_SECS=120`.
 - The entrypoint script can be reused locally: `scripts/bootstrap-network.sh` assumes it runs from the repo root (or `/app` in the container).
 
