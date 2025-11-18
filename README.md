@@ -96,6 +96,31 @@ export NODE_ID=3000
 ./foedus getbalance -address <your-address>
 ```
 
+## Dockerized Local Network
+
+Spin up a ready-to-mine playground with the included multi-stage `Dockerfile` and bootstrap script (`scripts/bootstrap-network.sh`). The container automates the full workflow:
+
+1. Sets `NODE_ID=3000`, creates a wallet, and initializes the blockchain with that address.
+2. Starts the API/source server (port `3000`, libp2p source on `8006`) and captures its multiaddress.
+3. Sets `NODE_ID=3001` and launches a miner that auto-connects to the captured multiaddress (libp2p port `8007`).
+
+### Build the image
+```bash
+docker build -t foedus-blockchain .
+```
+
+### Run the paired source + miner stack
+```bash
+docker run --rm -p 3000:3000 -p 8006:8006 -p 8007:8007 foedus-blockchain
+```
+
+Container logs stream from `/var/log/foedus/source.log` and `/var/log/foedus/miner.log`, so `docker logs -f <container>` shows both servers plus bootstrap progress. The API remains available on `http://localhost:3000`, while libp2p peers can dial the exposed 8006/8007 ports.
+
+**Customization tips:**
+- Persist state by mounting a volume: `-v foedus-data:/app/temp`.
+- Override defaults with env vars, e.g. `-e SOURCE_NODE_ID=4000 -e MINER_NODE_ID=4001 -e SOURCE_WAIT_SECS=120`.
+- The entrypoint script can be reused locally: `scripts/bootstrap-network.sh` assumes it runs from the repo root (or `/app` in the container).
+
 ## Module Documentation
 
 The codebase is organized into specialized modules with dedicated READMEs:

@@ -1,0 +1,8 @@
+.git
+.gitignore
+temp/
+docker/
+**/*.pem
+**/*.key
+**/*.crt
+**/*.log
