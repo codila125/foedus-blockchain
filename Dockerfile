@@ -17,7 +17,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     go build -trimpath -ldflags="-s -w" -o /out/foedus
 
-FROM alpine:3.20 AS runner
+FROM alpine:3.22 AS runner
 ENV FOEDUS_HOME=/app \
     FOEDUS_BIN=/usr/local/bin/foedus \
     FOEDUS_LOG_DIR=/var/log/foedus \
@@ -26,15 +26,19 @@ ENV FOEDUS_HOME=/app \
 
 WORKDIR /app
 
-RUN apk add --no-cache bash ca-certificates grep
+RUN apk add --no-cache ca-certificates \
+    && addgroup -S foedus \
+    && adduser -S -G foedus foedus \
+    && mkdir -p /app/temp ${FOEDUS_LOG_DIR}
 
 COPY --from=builder /out/foedus /usr/local/bin/foedus
 COPY scripts /app/scripts
 
 RUN chmod +x /app/scripts/*.sh \
-    && mkdir -p /app/temp ${FOEDUS_LOG_DIR}
+    && chown -R foedus:foedus /app /var/log/foedus /usr/local/bin/foedus
 
 VOLUME ["/app/temp", "/var/log/foedus"]
 
 EXPOSE 3000 8006 8007
 ENTRYPOINT ["/app/scripts/bootstrap-network.sh"]
+USER foedus

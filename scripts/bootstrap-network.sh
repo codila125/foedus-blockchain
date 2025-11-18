@@ -1,5 +1,6 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
+set -o pipefail 2>/dev/null || true
 
 APP_HOME=${FOEDUS_HOME:-/app}
 BIN_PATH=${FOEDUS_BIN:-/usr/local/bin/foedus}
@@ -20,7 +21,7 @@ log() {
 }
 
 run_cli() {
-  local node_id=$1
+  node_id=$1
   shift
   NODE_ID="$node_id" "$BIN_PATH" "$@"
 }
@@ -33,16 +34,17 @@ extract_base58_address() {
 }
 
 ensure_wallet_address() {
-  local node_id=$1
-  local wallet_file="${APP_HOME}/temp/wallets_${node_id}.data"
-  local output address
+  node_id=$1
+  wallet_file="${APP_HOME}/temp/wallets_${node_id}.data"
+  output=
+  address=
 
-  if [[ -f "$wallet_file" ]]; then
+  if [ -f "$wallet_file" ]; then
     log "Wallet file detected for node ${node_id}, using last recorded address"
     output=$(run_cli "$node_id" listaddresses 2>&1)
     printf '%s\n' "$output" >&2
     address=$(extract_base58_address "$output")
-    if [[ -z "${address:-}" ]]; then
+    if [ -z "${address:-}" ]; then
       log "No existing addresses found; creating a new wallet"
       output=$(run_cli "$node_id" createwallet 2>&1)
       printf '%s\n' "$output" >&2
@@ -55,7 +57,7 @@ ensure_wallet_address() {
     address=$(extract_base58_address "$output")
   fi
 
-  if [[ -z "${address:-}" ]]; then
+  if [ -z "${address:-}" ]; then
     log "Failed to determine wallet address for node ${node_id}"
     exit 1
   fi
@@ -64,11 +66,11 @@ ensure_wallet_address() {
 }
 
 ensure_blockchain() {
-  local node_id=$1
-  local address=$2
-  local db_dir="${APP_HOME}/temp/blocks_${node_id}"
+  node_id=$1
+  address=$2
+  db_dir="${APP_HOME}/temp/blocks_${node_id}"
 
-  if [[ -d "$db_dir" ]] && [[ -n "$(ls -A "$db_dir" 2>/dev/null)" ]]; then
+  if [ -d "$db_dir" ] && [ -n "$(ls -A "$db_dir" 2>/dev/null)" ]; then
     log "Blockchain already exists for node ${node_id}, skipping genesis creation"
     return
   fi
@@ -84,26 +86,24 @@ start_source_server() {
 }
 
 wait_for_source_multiaddr() {
-  local elapsed=0
-  while (( elapsed < SOURCE_WAIT_SECS )); do
-    if [[ -f "$SOURCE_LOG" ]]; then
-      local line
+  elapsed=0
+  while [ "$elapsed" -lt "$SOURCE_WAIT_SECS" ]; do
+    if [ -f "$SOURCE_LOG" ]; then
       line=$(grep '\[SOURCE NODE\] Address:' "$SOURCE_LOG" 2>/dev/null | head -n 1 || true)
-      if [[ -n "${line:-}" ]]; then
-        local addr
+      if [ -n "${line:-}" ]; then
         addr=${line##*Address: }
         printf '%s' "$addr" | tr -d '\r' | xargs
         return 0
       fi
     fi
     sleep 1
-    ((elapsed++))
+    elapsed=$((elapsed + 1))
   done
   return 1
 }
 
 start_miner_node() {
-  local source_addr=$1
+  source_addr=$1
   log "Starting miner node on NODE_ID=${MINER_NODE_ID}"
   NODE_ID="$MINER_NODE_ID" "$BIN_PATH" startnode -source "$source_addr" >>"$MINER_LOG" 2>&1 &
   MINER_PID=$!
@@ -118,7 +118,7 @@ start_log_streams() {
 
 stop_background_pids() {
   for pid in "$@"; do
-    if [[ -n "${pid:-}" ]] && kill -0 "$pid" 2>/dev/null; then
+    if [ -n "${pid:-}" ] && kill -0 "$pid" 2>/dev/null; then
       kill "$pid" 2>/dev/null || true
     fi
   done
@@ -126,14 +126,14 @@ stop_background_pids() {
 
 wait_on_pids() {
   for pid in "$@"; do
-    if [[ -n "${pid:-}" ]]; then
+    if [ -n "${pid:-}" ]; then
       wait "$pid" 2>/dev/null || true
     fi
   done
 }
 
 cleanup() {
-  local exit_code=$1
+  exit_code=$1
   stop_background_pids "$SOURCE_PID" "$MINER_PID" "$SOURCE_TAIL_PID" "$MINER_TAIL_PID"
   wait_on_pids "$SOURCE_PID" "$MINER_PID" "$SOURCE_TAIL_PID" "$MINER_TAIL_PID"
   return $exit_code
@@ -157,7 +157,6 @@ main() {
   log "Data directory: $APP_HOME/temp"
   log "Logs: $LOG_DIR"
 
-  local source_wallet
   source_wallet=$(ensure_wallet_address "$SOURCE_NODE_ID")
   printf '\n' >&2
   ensure_blockchain "$SOURCE_NODE_ID" "$source_wallet"
@@ -166,7 +165,6 @@ main() {
   start_log_streams
 
   log "Waiting for source node multiaddress (timeout: ${SOURCE_WAIT_SECS}s)"
-  local multiaddr
   if ! multiaddr=$(wait_for_source_multiaddr); then
     log "Timed out waiting for source node multiaddress"
     exit 1
@@ -179,8 +177,15 @@ main() {
   log "Miner logs  -> $MINER_LOG"
   log "API server available on port ${SOURCE_NODE_ID}"
 
-  if ! wait -n "$SOURCE_PID" "$MINER_PID"; then
-    local status=$?
+  status=0
+  for pid in "$SOURCE_PID" "$MINER_PID"; do
+    if [ -n "${pid:-}" ]; then
+      if ! wait "$pid"; then
+        status=$?
+      fi
+    fi
+  done
+  if [ "$status" -ne 0 ]; then
     log "One of the Foedus processes exited with status $status"
     exit $status
   fi

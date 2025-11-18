@@ -109,6 +109,13 @@ Spin up a ready-to-mine playground with the included multi-stage `Dockerfile` an
 docker build -t foedus-blockchain .
 ```
 
+### Pull the published image
+```bash
+docker pull codila125/foedus-blockchain:0.1.1
+```
+
+This image is the CI-built artifact for release `0.1.1`; it exposes the same entrypoint and ports as the locally built image but skips the build step so you can try Foedus immediately.
+
 ### Run the paired source + miner stack
 ```bash
 docker run --rm -p 3000:3000 -p 8006:8006 -p 8007:8007 foedus-blockchain
