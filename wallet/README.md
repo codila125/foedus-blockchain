@@ -73,7 +73,7 @@ err = wallets.SaveFile(nodeID)
 
 ```go
 if !ValidateAddress(address) {
-    log.Fatal("Invalid address")
+    log.Print("Invalid address")
 }
 ```
 
@@ -190,7 +190,7 @@ log.Printf("New address: %s", address)
 // Save to disk
 err = wallets.SaveFile("3000")
 if err != nil {
-    log.Fatal(err)
+    log.Print(err)
 }
 ```
 
@@ -200,13 +200,13 @@ if err != nil {
 // Load existing wallets
 wallets, err := CreateWallets("3000")
 if err != nil {
-    log.Fatal(err)
+    log.Print(err)
 }
 
 // Get specific wallet
 wallet, err := wallets.GetWallet(address)
 if err != nil {
-    log.Fatal("Wallet not found")
+    log.Print("Wallet not found")
 }
 
 // Use private key for signing
@@ -217,7 +217,7 @@ signature := ed25519.Sign(wallet.PrivateKey, message)
 
 ```go
 if !ValidateAddress(address) {
-    log.Fatal("Invalid address")
+    log.Print("Invalid address")
 }
 
 // Safe to use address

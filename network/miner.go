@@ -65,7 +65,7 @@ func RunMinerNode(port, Address string) {
 	if !database.DBExists(path) {
 		log.Printf("[BLOCKCHAIN] No existing blockchain found for node %s", port)
 		if err := GetBlockchain(minerNode, peer.ID, port); err != nil {
-			log.Panicf("[BLOCKCHAIN] Failed to sync blockchain: %v", err)
+			log.Printf("[BLOCKCHAIN] Failed to sync blockchain: %v", err)
 		}
 		log.Printf("[BLOCKCHAIN] Successfully synchronized blockchain for node %s", port)
 

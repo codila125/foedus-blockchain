@@ -84,7 +84,7 @@ func (u *UTXOSet) Reindex() {
 	for txID, outs := range UTXOs {
 		key, err := hex.DecodeString(txID)
 		if err != nil {
-			log.Panic(err)
+			log.Print(err)
 		}
 		key = append(UTXOPrefix, key...)
 
@@ -141,11 +141,11 @@ func (u *UTXOSet) Update(block *Block) {
 
 				if len(updatedOuts.Outputs) == 0 {
 					if err := batch.Delete(inID, nil); err != nil {
-						log.Panic(err)
+						log.Print(err)
 					}
 				} else {
 					if err := batch.Set(inID, updatedOuts.SerializeOutputs(), nil); err != nil {
-						log.Panic(err)
+						log.Print(err)
 					}
 				}
 			}
@@ -157,12 +157,12 @@ func (u *UTXOSet) Update(block *Block) {
 
 		txID := append(UTXOPrefix, tx.ID...)
 		if err := batch.Set(txID, newOutputs.SerializeOutputs(), nil); err != nil {
-			log.Panic(err)
+			log.Print(err)
 		}
 	}
 
 	if err := db.Apply(batch, pebble.Sync); err != nil {
-		log.Panic(err)
+		log.Print(err)
 	}
 	batch.Close()
 
@@ -201,11 +201,11 @@ func (u *UTXOSet) DeleteByPrefix(prefix []byte) {
 			batch := db.NewBatch()
 			for _, delKey := range keysForDelete {
 				if err := batch.Delete(delKey, nil); err != nil {
-					log.Panic(err)
+					log.Print(err)
 				}
 			}
 			if err := db.Apply(batch, &pebble.WriteOptions{Sync: true}); err != nil {
-				log.Panic(err)
+				log.Print(err)
 			}
 			batch.Close()
 			keysForDelete = make([][]byte, 0, collectSize)
@@ -218,11 +218,11 @@ func (u *UTXOSet) DeleteByPrefix(prefix []byte) {
 		batch := db.NewBatch()
 		for _, delKey := range keysForDelete {
 			if err := batch.Delete(delKey, nil); err != nil {
-				log.Panic(err)
+				log.Print(err)
 			}
 		}
 		if err := db.Apply(batch, &pebble.WriteOptions{Sync: true}); err != nil {
-			log.Panic(err)
+			log.Print(err)
 		}
 		batch.Close()
 	}

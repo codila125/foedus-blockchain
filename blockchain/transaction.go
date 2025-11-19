@@ -32,7 +32,7 @@ func CoinbaseTx(to, data string) *Transaction {
 		randData := make([]byte, 20)
 		_, err := rand.Read(randData)
 		if err != nil {
-			log.Panic(err)
+			log.Print(err)
 		}
 		data = fmt.Sprintf("%x", randData)
 	}
@@ -134,7 +134,7 @@ func NewTransaction(w *wallet.Wallet, to string, amount int, UTXO *UTXOSet) *Tra
 	acc, validOutputs := UTXO.FindSpendableOutputs(pubKeyHash, amount)
 
 	if acc < amount {
-		log.Panicf("[TRANSACTION] Insufficient funds - Required: %d, Available: %d", amount, acc)
+		log.Printf("[TRANSACTION] Insufficient funds - Required: %d, Available: %d", amount, acc)
 	}
 
 	for txid, outs := range validOutputs {
@@ -173,7 +173,7 @@ func (tx *Transaction) Sign(privKey ed25519.PrivateKey, prevTXs map[string]Trans
 
 	for _, in := range tx.Inputs {
 		if prevTXs[hex.EncodeToString(in.ID)].ID == nil {
-			log.Panicf("[TRANSACTION] Signing failed - Invalid parent transaction: %x", in.ID)
+			log.Printf("[TRANSACTION] Signing failed - Invalid parent transaction: %x", in.ID)
 		}
 	}
 
@@ -221,7 +221,7 @@ func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
 
 	for _, in := range tx.Inputs {
 		if prevTXs[hex.EncodeToString(in.ID)].ID == nil {
-			log.Panicf("[TRANSACTION] Verification failed - Invalid parent transaction: %x", in.ID)
+			log.Printf("[TRANSACTION] Verification failed - Invalid parent transaction: %x", in.ID)
 		}
 	}
 

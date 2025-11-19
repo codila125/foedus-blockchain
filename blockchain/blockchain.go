@@ -58,7 +58,7 @@ func NewBlockChain(address string, nodeID string) *BlockChain {
 	log.Printf("[BLOCKCHAIN] Initializing new blockchain for node %s", nodeID)
 
 	if err := os.MkdirAll(path, 0o755); err != nil {
-		log.Panic(err)
+		log.Printf("[BLOCKCHAIN] Failed to create blockchain directory: %v", err)
 	}
 
 	db, err := database.OpenDB(path)
@@ -111,7 +111,7 @@ func ContinueBlockChain(nodeID string) *BlockChain {
 		lastHash = make([]byte, len(lastHashBytes))
 		copy(lastHash, lastHashBytes)
 	} else {
-		log.Panicf("[BLOCKCHAIN] Failed to retrieve last hash for node %s: %v", nodeID, err)
+		log.Printf("[BLOCKCHAIN] Failed to retrieve last hash for node %s: %v", nodeID, err)
 	}
 
 	blockchain := BlockChain{lastHash, db}
@@ -137,13 +137,13 @@ func (blockchain *BlockChain) MineBlock(transactions []*Transaction, contracts [
 
 	for _, tx := range transactions {
 		if !blockchain.VerifyTransaction(tx, txMap) {
-			log.Panicf("[MINING] Invalid transaction detected: %x", tx.ID)
+			log.Printf("[MINING] Invalid transaction detected: %x", tx.ID)
 		}
 	}
 
 	for _, ct := range contracts {
 		if !blockchain.VerifyContract(ct) {
-			log.Panicf("[MINING] Invalid contract detected: %x", ct.ID)
+			log.Printf("[MINING] Invalid contract detected: %x", ct.ID)
 		}
 	}
 
@@ -151,7 +151,7 @@ func (blockchain *BlockChain) MineBlock(transactions []*Transaction, contracts [
 
 	lastHashBytes, closer, err := db.Get([]byte(LastHashKey))
 	if err != nil {
-		log.Panicf("[BLOCKCHAIN] Failed to retrieve last hash: %v", err)
+		log.Printf("[BLOCKCHAIN] Failed to retrieve last hash: %v", err)
 	}
 	lastHash = make([]byte, len(lastHashBytes))
 	copy(lastHash, lastHashBytes)
@@ -159,7 +159,7 @@ func (blockchain *BlockChain) MineBlock(transactions []*Transaction, contracts [
 
 	lastBlockData, closer, err := db.Get(lastHash)
 	if err != nil {
-		log.Panicf("[BLOCKCHAIN] Failed to retrieve last block: %v", err)
+		log.Printf("[BLOCKCHAIN] Failed to retrieve last block: %v", err)
 	}
 	blockDataCopy := make([]byte, len(lastBlockData))
 	copy(blockDataCopy, lastBlockData)
@@ -176,11 +176,11 @@ func (blockchain *BlockChain) MineBlock(transactions []*Transaction, contracts [
 
 	err = batch.Set(newBlock.Hash, newBlock.SerializeBlock(), nil)
 	if err != nil {
-		log.Panicf("[BLOCKCHAIN] Failed to store new block: %v", err)
+		log.Printf("[BLOCKCHAIN] Failed to store new block: %v", err)
 	}
 	err = batch.Set([]byte(LastHashKey), newBlock.Hash, nil)
 	if err != nil {
-		log.Panicf("[BLOCKCHAIN] Failed to update last hash: %v", err)
+		log.Printf("[BLOCKCHAIN] Failed to update last hash: %v", err)
 	}
 
 	blockchain.LastHash = newBlock.Hash

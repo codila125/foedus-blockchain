@@ -172,7 +172,7 @@ func (cs *ContractState) SerializeContractState() []byte {
 
 	data, err := proto.Marshal(protoContractState)
 	if err != nil {
-		log.Panic(err)
+		log.Print(err)
 	}
 	return data
 }
@@ -185,7 +185,7 @@ func DeserializeContractState(data []byte) ContractState {
 	protoContractState := &protobuf.ContractState{}
 	err := proto.Unmarshal(data, protoContractState)
 	if err != nil {
-		log.Panic(err)
+		log.Print(err)
 	}
 
 	// Deserialize Milestones
@@ -271,7 +271,7 @@ func (cc *ContractCore) SerializeContractCore() []byte {
 
 	data, err := proto.Marshal(protoContractCore)
 	if err != nil {
-		log.Panic(err)
+		log.Print(err)
 	}
 	return data
 }

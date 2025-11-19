@@ -24,7 +24,7 @@ func CoinbaseOp(creator, data string) *Contract {
 		randData := make([]byte, 20)
 		_, err := rand.Read(randData)
 		if err != nil {
-			log.Panic(err)
+			log.Print(err)
 		}
 		data = fmt.Sprintf("%x", randData)
 	}

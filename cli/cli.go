@@ -42,42 +42,42 @@ func (cli *CommandLine) Run() {
 	case "reindex":
 		err := reindexCmd.Parse(os.Args[2:])
 		if err != nil {
-			log.Panic(err)
+			log.Print(err)
 		}
 	case "getbalance":
 		err := getBalanceCmd.Parse(os.Args[2:])
 		if err != nil {
-			log.Panic(err)
+			log.Print(err)
 		}
 	case "createblockchain":
 		err := createBlockchainCmd.Parse(os.Args[2:])
 		if err != nil {
-			log.Panic(err)
+			log.Print(err)
 		}
 	case "listaddresses":
 		err := listAddressesCmd.Parse(os.Args[2:])
 		if err != nil {
-			log.Panic(err)
+			log.Print(err)
 		}
 	case "createwallet":
 		err := createWalletCmd.Parse(os.Args[2:])
 		if err != nil {
-			log.Panic(err)
+			log.Print(err)
 		}
 	case "printchain":
 		err := printChainCmd.Parse(os.Args[2:])
 		if err != nil {
-			log.Panic(err)
+			log.Print(err)
 		}
 	case "send":
 		err := sendCmd.Parse(os.Args[2:])
 		if err != nil {
-			log.Panic(err)
+			log.Print(err)
 		}
 	case "startnode":
 		err := startNodeCmd.Parse(os.Args[2:])
 		if err != nil {
-			log.Panic(err)
+			log.Print(err)
 		}
 	default:
 		cli.printUsage()

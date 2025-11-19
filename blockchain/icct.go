@@ -76,7 +76,7 @@ func (i *ICCTSet) Reindex() {
 	for ctID, state := range ICCTs {
 		key, err := hex.DecodeString(ctID)
 		if err != nil {
-			log.Panic(err)
+			log.Print(err)
 		}
 		key = append(ICCTPrefix, key...)
 
@@ -115,7 +115,7 @@ func (i *ICCTSet) Update(block *Block) {
 			}
 
 			if err := batch.Set(ctID, state.SerializeContractState(), &pebble.WriteOptions{}); err != nil {
-				log.Panic(err)
+				log.Print(err)
 			}
 			log.Printf("[ICCT] Contract %x updated - Status: %s", ct.ID, ct.Status)
 		} else {
@@ -123,7 +123,7 @@ func (i *ICCTSet) Update(block *Block) {
 			if err := batch.Delete(ctID, &pebble.WriteOptions{}); err != nil {
 				// If key doesn't exist, that's okay
 				if err != pebble.ErrNotFound {
-					log.Panic(err)
+					log.Print(err)
 				}
 			}
 			log.Printf("[ICCT] Contract %x removed - Status: %s", ct.ID, ct.Status)
@@ -131,7 +131,7 @@ func (i *ICCTSet) Update(block *Block) {
 	}
 
 	if err := db.Apply(batch, pebble.Sync); err != nil {
-		log.Panic(err)
+		log.Print(err)
 	}
 	batch.Close()
 
@@ -172,12 +172,12 @@ func (i *ICCTSet) DeleteByPrefix(prefix []byte) {
 
 			for _, delKey := range keysForDelete {
 				if err := batch.Delete(delKey, nil); err != nil {
-					log.Panic(err)
+					log.Print(err)
 				}
 			}
 
 			if err := db.Apply(batch, &pebble.WriteOptions{Sync: true}); err != nil {
-				log.Panic(err)
+				log.Print(err)
 			}
 			batch.Close()
 
@@ -192,12 +192,12 @@ func (i *ICCTSet) DeleteByPrefix(prefix []byte) {
 
 		for _, delKey := range keysForDelete {
 			if err := batch.Delete(delKey, nil); err != nil {
-				log.Panic(err)
+				log.Print(err)
 			}
 		}
 
 		if err := db.Apply(batch, &pebble.WriteOptions{Sync: true}); err != nil {
-			log.Panic(err)
+			log.Print(err)
 		}
 		batch.Close()
 	}

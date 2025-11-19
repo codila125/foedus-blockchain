@@ -46,7 +46,7 @@ exists := DBExists("./temp/blocks_3000")
 ```go
 db, err := OpenDB("./temp/blocks_3000")
 if err != nil {
-    log.Fatal(err)
+    log.Print(err)
 }
 defer db.Close()
 ```
@@ -92,7 +92,7 @@ writer := NewBatchWriter(db.GetRawDB(), 1000)
 for i := 0; i < 10000; i++ {
     err := writer.Write(key, value)
     if err != nil {
-        log.Fatal(err)
+        log.Print(err)
     }
 }
 

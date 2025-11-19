@@ -99,7 +99,7 @@ func (cli *CommandLine) printChain(nodeID string) {
 // sets, which are essential for processing future transactions and contracts.
 func (cli *CommandLine) createBlockChain(address string, nodeID string) {
 	if !wallet.ValidateAddress(address) {
-		log.Panic("[CLI] Invalid address provided")
+		log.Print("[CLI] Invalid address provided")
 	}
 
 	log.Printf("[CLI] Creating new blockchain for address: %s", address)
@@ -121,7 +121,7 @@ func (cli *CommandLine) createBlockChain(address string, nodeID string) {
 // outputs (UTXOs) associated with the address's public key hash.
 func (cli *CommandLine) getBalance(address string, nodeID string) {
 	if !wallet.ValidateAddress(address) {
-		log.Panic("[CLI] Invalid address provided")
+		log.Print("[CLI] Invalid address provided")
 	}
 
 	log.Printf("[CLI] Fetching balance for address: %s", address)
@@ -148,10 +148,10 @@ func (cli *CommandLine) getBalance(address string, nodeID string) {
 // mines a new block to include it, and updates the UTXO set accordingly.
 func (cli *CommandLine) send(from, to string, amount int, nodeID string) {
 	if !wallet.ValidateAddress(from) {
-		log.Panic("[CLI] Invalid sender address")
+		log.Print("[CLI] Invalid sender address")
 	}
 	if !wallet.ValidateAddress(to) {
-		log.Panic("[CLI] Invalid recipient address")
+		log.Print("[CLI] Invalid recipient address")
 	}
 
 	log.Printf("[CLI] Initiating transaction: %d from %s to %s", amount, from, to)
@@ -162,11 +162,11 @@ func (cli *CommandLine) send(from, to string, amount int, nodeID string) {
 
 	wallets, err := wallet.CreateWallets(nodeID)
 	if err != nil {
-		log.Panic(err)
+		log.Print(err)
 	}
 	wallet, err := wallets.GetWallet(from)
 	if err != nil {
-		log.Panic(err)
+		log.Print(err)
 	}
 
 	tx := blockchain.NewTransaction(&wallet, to, amount, &UTXOSet)

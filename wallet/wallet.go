@@ -62,7 +62,7 @@ func ValidateAddress(address string) bool {
 func NewKeyPair() (ed25519.PublicKey, ed25519.PrivateKey) {
 	public, private, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
-		log.Panic(err)
+		log.Print(err)
 	}
 
 	return public, private

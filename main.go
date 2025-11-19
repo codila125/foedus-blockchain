@@ -41,7 +41,7 @@ func main() {
 
 	nodeID := os.Getenv("NODE_ID")
 	if nodeID == "" {
-		log.Fatal("[SERVER] NODE_ID environment variable is not set")
+		log.Print("[SERVER] NODE_ID environment variable is not set")
 	}
 
 	serve := server.NewServer(nodeID)
@@ -70,7 +70,7 @@ func gracefulShutdown(srv *http.Server, appServer *server.Server, serverErrors c
 
 	select {
 	case err := <-serverErrors:
-		log.Fatalf("[SERVER] Fatal server error: %v", err)
+		log.Printf("[SERVER] Fatal server error: %v", err)
 	case sig := <-shutdownChan:
 		log.Printf("[SERVER] Received signal: %v. Initiating graceful shutdown...", sig)
 		shutdown(srv, appServer)
