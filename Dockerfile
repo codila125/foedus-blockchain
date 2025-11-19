@@ -69,8 +69,8 @@ RUN chmod +x /app/scripts/*.sh
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD foedus --health || exit 1
 
-# Data volumes
-VOLUME ["/app/temp", "/app/data", "/var/log/foedus"]
+# Data volumes - only persistent data and logs require volumes
+VOLUME ["/app/data", "/var/log/foedus"]
 
 # Expose ports
 EXPOSE 3000 8006 8007

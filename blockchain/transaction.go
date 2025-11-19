@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sort"
 
 	"github.com/codila125/foedus-blockchain/wallet"
 )
@@ -163,9 +164,41 @@ func NewTransaction(w *wallet.Wallet, to string, amount int, UTXO *UTXOSet) *Tra
 	return &tx
 }
 
+// sortedInputIndices returns the indices of transaction inputs sorted by their ID in
+// deterministic order (lexicographically by hex-encoded transaction ID). This ensures
+// that signatures are generated and verified in the same order across all nodes,
+// regardless of Go's randomized map iteration or platform differences.
+func (tx *Transaction) sortedInputIndices() []int {
+	type idxPair struct {
+		idx int
+		id  string
+	}
+
+	pairs := make([]idxPair, len(tx.Inputs))
+	for i, in := range tx.Inputs {
+		pairs[i] = idxPair{
+			idx: i,
+			id:  hex.EncodeToString(in.ID),
+		}
+	}
+
+	sort.Slice(pairs, func(i, j int) bool {
+		return pairs[i].id < pairs[j].id
+	})
+
+	indices := make([]int, len(pairs))
+	for i, pair := range pairs {
+		indices[i] = pair.idx
+	}
+	return indices
+}
+
 // Sign generates a digital signature for each input in the transaction. It uses
 // the provided private key and a map of the previous transactions to create a
-// trimmed copy of the transaction for signing, ensuring each input is authorized.
+// deterministic serialization of the transaction for signing, ensuring each input is authorized.
+// The method uses protobuf serialization to guarantee deterministic output across different
+// implementations and platforms. Inputs are signed in lexicographic order by their ID
+// to ensure cross-platform consistency.
 func (tx *Transaction) Sign(privKey ed25519.PrivateKey, prevTXs map[string]Transaction) {
 	if tx.IsCoinbaseTx() {
 		return
@@ -177,18 +210,23 @@ func (tx *Transaction) Sign(privKey ed25519.PrivateKey, prevTXs map[string]Trans
 		}
 	}
 
-	txCopy := tx.TrimmedCopy()
+	// Sign inputs in deterministic order to ensure consistency across all nodes
+	sortedIndices := tx.sortedInputIndices()
 
-	for inID, in := range txCopy.Inputs {
+	for _, inID := range sortedIndices {
+		in := tx.Inputs[inID]
 		prevTX := prevTXs[hex.EncodeToString(in.ID)]
-		txCopy.Inputs[inID].Signature = nil
+
+		// Create a trimmed copy and update with public key hash
+		txCopy := tx.TrimmedCopy()
 		txCopy.Inputs[inID].PubKey = prevTX.Outputs[in.Out].PubKeyHash
 
-		dataToSign := fmt.Sprintf("%x\n", txCopy)
+		// Use deterministic protobuf serialization for signing
+		dataToSign := txCopy.SerializeForSigning()
 
-		signature := ed25519.Sign(privKey, []byte(dataToSign))
+		// Sign the deterministic byte representation
+		signature := ed25519.Sign(privKey, dataToSign)
 		tx.Inputs[inID].Signature = signature
-		txCopy.Inputs[inID].PubKey = nil
 	}
 }
 
@@ -212,8 +250,9 @@ func (tx *Transaction) TrimmedCopy() Transaction {
 }
 
 // Verify checks the validity of the signatures for each input in the transaction.
-// It reconstructs the data that was signed and uses the public key from the input
-// to verify the signature. It returns true if all signatures are valid.
+// It uses deterministic protobuf serialization to reconstruct the data that was signed
+// and uses the public key from the input to verify the signature.
+// It returns true if all signatures are valid.
 func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
 	if tx.IsCoinbaseTx() {
 		return true
@@ -225,20 +264,25 @@ func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
 		}
 	}
 
-	txCopy := tx.TrimmedCopy()
+	// Verify inputs in the same deterministic order they were signed
+	sortedIndices := tx.sortedInputIndices()
 
-	for inID, in := range tx.Inputs {
+	for _, inID := range sortedIndices {
+		in := tx.Inputs[inID]
 		prevTx := prevTXs[hex.EncodeToString(in.ID)]
-		txCopy.Inputs[inID].Signature = nil
+
+		// Create a trimmed copy for verification
+		txCopy := tx.TrimmedCopy()
 		txCopy.Inputs[inID].PubKey = prevTx.Outputs[in.Out].PubKeyHash
 
-		dataToVerify := fmt.Sprintf("%x\n", txCopy)
+		// Use deterministic protobuf serialization for verification
+		dataToVerify := txCopy.SerializeForSigning()
 
+		// Verify the signature using the deterministic byte representation
 		pubKey := ed25519.PublicKey(in.PubKey)
-		if !ed25519.Verify(pubKey, []byte(dataToVerify), in.Signature) {
+		if !ed25519.Verify(pubKey, dataToVerify, in.Signature) {
 			return false
 		}
-		txCopy.Inputs[inID].PubKey = nil
 	}
 
 	return true

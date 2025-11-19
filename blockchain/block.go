@@ -26,9 +26,21 @@ type Block struct {
 // CreateBlock constructs a new block, populates it with transactions and contracts,
 // and links it to the previous block in the chain. It initiates the proof-of-work
 // algorithm to find a valid hash and nonce for the block, thereby securing it.
+// The timestamp is obtained from the current system time and is deterministic
+// within the scope of a single block creation. For strict determinism across
+// nodes with different clocks, use CreateBlockWithTimestamp instead.
 func CreateBlock(txs []*Transaction, cts []*Contract, prevhash []byte, height int) *Block {
+	return CreateBlockWithTimestamp(txs, cts, prevhash, height, time.Now().Unix())
+}
+
+// CreateBlockWithTimestamp constructs a new block with an explicitly provided timestamp.
+// This enables deterministic block creation by allowing callers (such as consensus
+// mechanisms) to control the timestamp value. This is essential for network consensus,
+// as it prevents timestamp variations due to different system clocks across nodes.
+// For mining/mempool scenarios, use CreateBlock instead, which uses the current time.
+func CreateBlockWithTimestamp(txs []*Transaction, cts []*Contract, prevhash []byte, height int, timestamp int64) *Block {
 	block := &Block{
-		Timestamp:    time.Now().Unix(),
+		Timestamp:    timestamp,
 		Transactions: txs,
 		Contracts:    cts,
 		PrevHash:     prevhash,

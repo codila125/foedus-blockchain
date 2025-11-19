@@ -7,6 +7,74 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// SerializeForSigning creates a deterministic protobuf representation of a transaction
+// for signing purposes. This method excludes signatures and public keys, ensuring that
+// the same transaction data always produces the same bytes (deterministic serialization).
+// This is critical for cryptographic signing and verification consistency.
+func (tx *Transaction) SerializeForSigning() []byte {
+	protoTransaction := &protobuf.Transaction{
+		Id:      tx.ID,
+		Inputs:  []*protobuf.TxInput{},
+		Outputs: []*protobuf.TxOutput{},
+	}
+
+	for _, in := range tx.Inputs {
+		// Exclude Signature and PubKey for signing - only include ID and Out
+		protoTransaction.Inputs = append(protoTransaction.Inputs, &protobuf.TxInput{
+			Id:  in.ID,
+			Out: int32(in.Out),
+		})
+	}
+
+	for _, out := range tx.Outputs {
+		protoTransaction.Outputs = append(protoTransaction.Outputs, &protobuf.TxOutput{
+			Value:      int32(out.Value),
+			PubKeyHash: out.PubKeyHash,
+		})
+	}
+
+	data, err := proto.Marshal(protoTransaction)
+	Handle(err)
+
+	return data
+}
+
+// SerializeForVerification creates a deterministic protobuf representation of a transaction
+// for verification purposes at a specific input index. This serialization includes only
+// the pubKeyHash at the given input index, ensuring proper signature verification.
+// The method maintains consistency with the original serialization format used during signing.
+func (tx *Transaction) SerializeForVerification(inputIndex int) []byte {
+	protoTransaction := &protobuf.Transaction{
+		Id:      tx.ID,
+		Inputs:  []*protobuf.TxInput{},
+		Outputs: []*protobuf.TxOutput{},
+	}
+
+	for i, in := range tx.Inputs {
+		input := &protobuf.TxInput{
+			Id:  in.ID,
+			Out: int32(in.Out),
+		}
+		// Only include the pubKeyHash for the input being verified
+		if i == inputIndex {
+			input.PubKey = in.PubKey
+		}
+		protoTransaction.Inputs = append(protoTransaction.Inputs, input)
+	}
+
+	for _, out := range tx.Outputs {
+		protoTransaction.Outputs = append(protoTransaction.Outputs, &protobuf.TxOutput{
+			Value:      int32(out.Value),
+			PubKeyHash: out.PubKeyHash,
+		})
+	}
+
+	data, err := proto.Marshal(protoTransaction)
+	Handle(err)
+
+	return data
+}
+
 // SerializeOutputs converts a collection of transaction outputs (TxOutputs) into a
 // byte slice using protobuf encoding. This is used for storing outputs in the database
 // or transmitting them over the network.
