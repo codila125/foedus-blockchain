@@ -151,7 +151,6 @@ The CLI provides formatted output for blockchain data:
 - **API** - HTTP REST interface (alternative to CLI)
 - **Blockchain** - Core blockchain operations
 - **Wallet** - Key generation and address validation
-- **Network** - Node networking
 - **Network** - P2P communication layer
 
 ## 🆘 Help & Support

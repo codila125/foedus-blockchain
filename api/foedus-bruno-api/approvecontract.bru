@@ -1,13 +1,20 @@
 meta {
   name: approvecontract
   type: http
-  seq: 7
+  seq: 8
 }
 
-get {
-  url: http://localhost:3000/blockchain/approvecontract/12JvKCTW6VLWUykrNMt3aHxKiHagTn8cN3UmD1oL3Bh4FYGSrak/fc4613d4998ce706348eb556603f6028d3512c42b7ba231a82c959bb190ae838
-  body: none
+post {
+  url: http://localhost:3000/blockchain/approvecontract
+  body: json
   auth: inherit
+}
+
+body:json {
+  {
+    "contract_id": "bcef9b3876d0d055dd59bbf43c7f9434e88fb4e746d9c850add7a99eb5b4552d",
+    "approver_address": "12GCvGvYzr8opQYtx7hKa7VdQsgzbhrTvHBJReoC4KKeUHXZkMV"
+  }
 }
 
 settings {

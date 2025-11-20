@@ -111,10 +111,10 @@ docker build -t foedus-blockchain .
 
 ### Pull the published image
 ```bash
-docker pull codila125/foedus-blockchain:0.1.1
+docker pull codila125/foedus-blockchain:0.1.2
 ```
 
-This image is the CI-built artifact for release `0.1.1`; it exposes the same entrypoint and ports as the locally built image but skips the build step so you can try Foedus immediately.
+This image is the CI-built artifact for release `0.1.2`; it exposes the same entrypoint and ports as the locally built image but skips the build step so you can try Foedus immediately.
 
 ### Run the paired source + miner stack
 ```bash
@@ -150,7 +150,7 @@ Container logs stream from `/var/log/foedus/source.log` and `/var/log/foedus/min
 
 The codebase is organized into specialized modules with dedicated READMEs:
 
-- **[api/](api/)** - RESTful HTTP server with Chi router (8 endpoints)
+- **[api/](api/)** - RESTful HTTP server with Chi router (7 endpoints)
 - **[blockchain/](blockchain/)** - Core UTXO/PoW implementation with smart contracts
 - **[cli/](cli/)** - Command-line interface (8 commands)
 - **[database/](database/)** - PebbleDB wrapper with batch operations
@@ -179,37 +179,69 @@ Nodes automatically discover and sync blockchain state using libp2p protocol `/f
 Create milestone-based project contracts:
 
 ```bash
-# API endpoint
-POST /api/createcontract
-{
-  "creator": "1A2B3C...",
-  "participant": "1X9Y8Z...",
-  "amount": 1000,
-  "milestones": [
-    {"description": "Design phase", "amount": 300},
-    {"description": "Development", "amount": 500},
-    {"description": "Testing", "amount": 200}
-  ]
-}
+# Create a contract
+curl -X POST http://localhost:3000/blockchain/createcontract/{creator_address} \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "New Website Development",
+    "description": "A contract to build and deploy a new corporate website.",
+    "milestones": [
+      {
+        "title": "Phase 1: Design and Mockups",
+        "description": "Deliver complete mockups for main pages.",
+        "value": 500,
+        "due_date": 1762329600
+      },
+      {
+        "title": "Phase 2: Frontend Development",
+        "description": "Develop responsive frontend based on mockups.",
+        "value": 1500,
+        "due_date": 1764921600
+      }
+    ],
+    "parties": [
+      {"address": "{contractor_address}", "role": "CONTRACTOR"},
+      {"address": "{creator_address}", "role": "ARBITRATOR"}
+    ],
+    "terms": "Payment released upon completion and approval of each milestone.",
+    "attachments": ["https://example.com/document.pdf"]
+  }'
+
+# Approve contract
+curl -X POST http://localhost:3000/blockchain/approvecontract \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contract_id": "{contract_id}",
+    "approver_address": "{approver_address}"
+  }'
+
+# Approve milestone
+curl -X POST http://localhost:3000/blockchain/approvemilestone \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contract_id": "{contract_id}",
+    "milestone_id": "{milestone_id}",
+    "approver_address": "{approver_address}",
+    "evidence": "Phase 1 mockups completed and reviewed"
+  }'
 ```
 
 Contract workflow:
-1. Creator proposes contract → Pending
-2. Participant approves → Active
-3. Milestones completed sequentially with multi-signature approval
-4. Funds released incrementally
+1. Creator proposes contract → DRAFT
+2. Parties approve with `POST /blockchain/approvecontract` → ACTIVE
+3. Milestones completed sequentially with `POST /blockchain/approvemilestone`
+4. Final milestone completion → COMPLETED
 
 ## API Reference
 
 **Core Endpoints:**
-- `POST /api/createwallet` - Generate new Ed25519 wallet
-- `GET /api/getbalance/:address` - Query UTXO balance
-- `POST /api/send` - Submit signed transaction
-- `POST /api/createcontract` - Propose new contract
-- `POST /api/approvecontract` - Accept contract terms
-- `POST /api/approvemilestone` - Complete milestone
-- `GET /api/getcontract/:contractID` - Query contract state
-- `GET /api/printchain` - Export full blockchain
+- `GET /blockchain/createwallet` - Generate new Ed25519 wallet
+- `GET /blockchain/getbalance/:address` - Query UTXO balance
+- `POST /blockchain/createcontract/:address` - Propose new contract
+- `POST /blockchain/approvecontract` - Accept contract terms (params in body)
+- `POST /blockchain/approvemilestone` - Complete milestone (params in body)
+- `GET /blockchain/getcontract/:contractID` - Query contract state
+- `GET /blockchain/printchain` - Export full blockchain
 
 See [api/README.md](api/README.md) for detailed specifications.
 

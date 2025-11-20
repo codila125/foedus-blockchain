@@ -26,11 +26,11 @@ func RegisterRoutes(handler *handler.Handler) *chi.Mux {
 		r.Get("/printchain", handler.PrintChain)
 		r.Get("/getbalance/{address}", handler.GetBalance)
 		r.Get("/getcontract/{contractID}", handler.GetContract)
-		r.Get("/approvecontract/{address}/{contractID}", handler.ApproveContract)
 
 		// POST endpoints for state-changing operations
 		r.Post("/createcontract/{address}", handler.CreateContract)
-		r.Post("/approvemilestone/{contractID}/{milestoneID}/{address}", handler.ApproveMilestone)
+		r.Post("/approvecontract", handler.ApproveContract)
+		r.Post("/approvemilestone", handler.ApproveMilestone)
 	})
 	return r
 }

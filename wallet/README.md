@@ -89,9 +89,6 @@ if !ValidateAddress(address) {
 - Version byte enables network identification
 - Ed25519 provides strong cryptographic security
 
-## Dependencies
-```
-
 ## Address Generation
 
 **Process:**

@@ -46,31 +46,72 @@ api/
 |----------|--------|-------------|
 | `/blockchain/createcontract/{address}` | POST | Create milestone-based contract |
 | `/blockchain/getcontract/{contractID}` | GET | Retrieve contract details |
-| `/blockchain/approvecontract/{address}/{contractID}` | GET | Sign and approve contract |
-| `/blockchain/approvemilestone/{contractID}/{milestoneID}/{address}` | POST | Approve milestone with evidence |
+| `/blockchain/approvecontract` | POST | Sign and approve contract (params in body) |
+| `/blockchain/approvemilestone` | POST | Approve milestone with evidence (params in body) |
 
 ## Usage Example
 
 ```bash
-# Set node port and start server
+# Start API server
 export NODE_ID=3000
-./blockchain
+./foedus
 
 # Create wallet
 curl http://localhost:3000/blockchain/createwallet
 
+# List addresses
+curl http://localhost:3000/blockchain/listaddresses
+
 # Check balance
-curl http://localhost:3000/blockchain/getbalance/{address}
+curl http://localhost:3000/blockchain/getbalance/{wallet_address}
 
 # Create contract
 curl -X POST http://localhost:3000/blockchain/createcontract/{creator_address} \
   -H "Content-Type: application/json" \
   -d '{
-    "title": "Project Alpha",
-    "description": "Development work",
-    "milestones": [{"title": "Phase 1", "value": 5000, "due_date": 1735689600}],
-    "parties": [{"address": "{contractor_address}", "role": "CONTRACTOR"}],
-    "terms": "terms_hash"
+    "title": "New Website Development",
+    "description": "A contract to build and deploy a new corporate website.",
+    "milestones": [
+      {
+        "title": "Phase 1: Design and Mockups",
+        "description": "Deliver complete Figma mockups for the main pages.",
+        "value": 500,
+        "due_date": 1762329600
+      },
+      {
+        "title": "Phase 2: Frontend Development",
+        "description": "Develop the responsive frontend based on approved mockups.",
+        "value": 1500,
+        "due_date": 1764921600
+      }
+    ],
+    "parties": [
+      {"address": "{contractor_address}", "role": "CONTRACTOR"},
+      {"address": "{creator_address}", "role": "ARBITRATOR"}
+    ],
+    "terms": "Payment will be released upon successful completion and approval of each milestone.",
+    "attachments": ["https://example.com/document.pdf"]
+  }'
+
+# Get contract details
+curl http://localhost:3000/blockchain/getcontract/{contract_id}
+
+# Approve contract
+curl -X POST http://localhost:3000/blockchain/approvecontract \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contract_id": "{contract_id}",
+    "approver_address": "{approver_address}"
+  }'
+
+# Approve milestone
+curl -X POST http://localhost:3000/blockchain/approvemilestone \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contract_id": "{contract_id}",
+    "milestone_id": "{milestone_id}",
+    "approver_address": "{approver_address}",
+    "evidence": "Phase 1 mockups completed and reviewed"
   }'
 ```
 

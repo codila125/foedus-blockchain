@@ -162,23 +162,36 @@ func (h *Handler) GetContract(w http.ResponseWriter, r *http.Request) {
 }
 
 // ApproveContract handles the request to approve a smart contract.
+// It expects a JSON body containing contract_id and approver_address.
 // It validates the approver's address, updates the contract's state, and
 // returns the updated contract as a JSON object with an HTTP 200 OK status.
 func (h *Handler) ApproveContract(w http.ResponseWriter, r *http.Request) {
-	contractID := chi.URLParam(r, "contractID")
-	approver := chi.URLParam(r, "address")
-	if !wallet.ValidateAddress(approver) {
-		http.Error(w, "Invalid approver address: "+approver, http.StatusBadRequest)
+	var req struct {
+		ContractID      string `json:"contract_id"`
+		ApproverAddress string `json:"approver_address"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	err := h.server.ApproveContract(r.Context(), contractID, approver)
+	if req.ContractID == "" {
+		http.Error(w, "contract_id is required", http.StatusBadRequest)
+		return
+	}
+
+	if !wallet.ValidateAddress(req.ApproverAddress) {
+		http.Error(w, "Invalid approver address: "+req.ApproverAddress, http.StatusBadRequest)
+		return
+	}
+
+	err := h.server.ApproveContract(r.Context(), req.ContractID, req.ApproverAddress)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	contract, err := h.server.ContractStatus(r.Context(), contractID)
+	contract, err := h.server.ContractStatus(r.Context(), req.ContractID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -190,32 +203,43 @@ func (h *Handler) ApproveContract(w http.ResponseWriter, r *http.Request) {
 }
 
 // ApproveMilestone handles the request to approve a milestone within a smart contract.
+// It expects a JSON body containing contract_id, milestone_id, approver_address, and evidence.
 // It validates the approver's address, processes the provided evidence, and updates
 // the milestone's status. It returns the updated contract with an HTTP 200 OK status.
 func (h *Handler) ApproveMilestone(w http.ResponseWriter, r *http.Request) {
-	contractID := chi.URLParam(r, "contractID")
-	milestoneID := chi.URLParam(r, "milestoneID")
-	approver := chi.URLParam(r, "address")
-	if !wallet.ValidateAddress(approver) {
-		http.Error(w, "Invalid approver address: "+approver, http.StatusBadRequest)
-		return
-	}
-
 	var req struct {
-		Evidence string `json:"evidence"`
+		ContractID      string `json:"contract_id"`
+		MilestoneID     string `json:"milestone_id"`
+		ApproverAddress string `json:"approver_address"`
+		Evidence        string `json:"evidence"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	err := h.server.ApproveMilestone(r.Context(), contractID, milestoneID, approver, []byte(req.Evidence))
+	if req.ContractID == "" {
+		http.Error(w, "contract_id is required", http.StatusBadRequest)
+		return
+	}
+
+	if req.MilestoneID == "" {
+		http.Error(w, "milestone_id is required", http.StatusBadRequest)
+		return
+	}
+
+	if !wallet.ValidateAddress(req.ApproverAddress) {
+		http.Error(w, "Invalid approver address: "+req.ApproverAddress, http.StatusBadRequest)
+		return
+	}
+
+	err := h.server.ApproveMilestone(r.Context(), req.ContractID, req.MilestoneID, req.ApproverAddress, []byte(req.Evidence))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	contract, err := h.server.ContractStatus(r.Context(), contractID)
+	contract, err := h.server.ContractStatus(r.Context(), req.ContractID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
