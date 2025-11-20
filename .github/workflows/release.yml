@@ -12,23 +12,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Read release notes
-        id: release_notes
-        run: |
-          if [ -f RELEASE_NOTES.md ]; then
-            echo "body<<EOF" >> $GITHUB_OUTPUT
-            cat RELEASE_NOTES.md >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-          else
-            echo "body=No release notes available." >> $GITHUB_OUTPUT
-          fi
-
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.ref_name }}
           name: Foedus Blockchain ${{ github.ref_name }}
-          body: ${{ steps.release_notes.outputs.body }}
+          body_path: RELEASE_NOTES.md
           draft: false
           prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
         env:
