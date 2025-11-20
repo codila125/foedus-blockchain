@@ -1,0 +1,163 @@
+docs {
+  # Foedus Blockchain API Documentation
+
+  ## Overview
+  Foedus Blockchain API is a comprehensive REST API for managing blockchain transactions, smart contracts, wallets, and cryptocurrency operations. This collection provides endpoints for creating contracts, managing milestones, handling approvals, and querying blockchain state.
+
+  **Base URL:** http://localhost:3000
+
+  ## API Endpoints
+
+  ### 1. Create Wallet
+  **Endpoint:** `GET /blockchain/createwallet`
+  **Description:** Creates a new blockchain wallet and returns the wallet address.
+  **Method:** GET
+  **Request Body:** None
+  **Response:** Returns a newly generated wallet address that can be used for transactions.
+  **Use Case:** Initialize a new account in the blockchain system.
+
+  ### 2. Print Chain
+  **Endpoint:** `GET /blockchain/printchain`
+  **Description:** Retrieves the complete blockchain ledger and transaction history.
+  **Method:** GET
+  **Response:** Returns the entire blockchain with all blocks and transactions in sequential order.
+  **Use Case:** Audit trail and blockchain state verification.
+
+  ### 3. List Addresses
+  **Endpoint:** `GET /blockchain/listaddresses`
+  **Description:** Retrieves all active wallet addresses in the system.
+  **Method:** GET
+  **Response:** Returns a list of all known wallet addresses.
+  **Use Case:** Discover available accounts and addresses in the network.
+
+  ### 4. Get Balance
+  **Endpoint:** `GET /blockchain/getbalance/{wallet_address}`
+  **Description:** Queries the current balance of a specific wallet address.
+  **Method:** GET
+  **Parameters:**
+    - `wallet_address` (path param): The target wallet address to query
+  **Response:** Returns the account balance and transaction history.
+  **Use Case:** Check account balance and verify funds.
+
+  ### 5. Get Contract
+  **Endpoint:** `GET /blockchain/getcontract/{contract_id}`
+  **Description:** Retrieves detailed information about a specific smart contract.
+  **Method:** GET
+  **Parameters:**
+    - `contract_id` (path param): The unique identifier of the contract
+  **Response:** Returns contract details including parties, milestones, status, and terms.
+  **Use Case:** View contract details, milestones, and current state.
+
+  ### 6. Create Contract
+  **Endpoint:** `POST /blockchain/createcontract/{creator_address}`
+  **Description:** Creates a new smart contract with defined milestones and parties.
+  **Method:** POST
+  **Parameters:**
+    - `creator_address` (path param): The wallet address creating the contract
+  **Request Body:**
+    ```
+    {
+      "title": "Contract Title",
+      "description": "Detailed description of the contract",
+      "milestones": [
+        {
+          "title": "Milestone Name",
+          "description": "Description of work to be completed",
+          "value": <amount_in_cryptocurrency>,
+          "due_date": <unix_timestamp>
+        }
+      ],
+      "parties": [
+        {
+          "address": "<wallet_address>",
+          "role": "CONTRACTOR|ARBITRATOR|CLIENT"
+        }
+      ],
+      "terms": "Contract terms and conditions",
+      "attachments": [
+        "document_urls_or_ipfs_hashes"
+      ]
+    }
+    ```
+  **Response:** Returns the created contract with contract_id and initial state.
+  **Use Case:** Create binding agreements with milestone-based payments on blockchain.
+
+  ### 7. Approve Milestone
+  **Endpoint:** `POST /blockchain/approvemilestone`
+  **Description:** Approves a specific milestone within a contract, typically releasing payment.
+  **Method:** POST
+  **Request Body:**
+    ```
+    {
+      "contract_id": "<contract_hash>",
+      "milestone_id": "<milestone_hash>",
+      "approver_address": "<wallet_address>",
+      "evidence": "<completion_evidence>"
+    }
+    ```
+  **Parameters:**
+    - `contract_id`: The contract containing the milestone
+    - `milestone_id`: The specific milestone being approved
+    - `approver_address`: Wallet address of the approver (typically CLIENT or ARBITRATOR)
+    - `evidence`: Documentation or proof of milestone completion
+  **Response:** Returns updated milestone status and transaction confirmation.
+  **Use Case:** Approve milestone completion and trigger automatic payment release.
+
+  ### 8. Approve Contract
+  **Endpoint:** `POST /blockchain/approvecontract`
+  **Description:** Approves an entire contract, finalizing all agreements.
+  **Method:** POST
+  **Request Body:**
+    ```
+    {
+      "contract_id": "<contract_hash>",
+      "approver_address": "<wallet_address>"
+    }
+    ```
+  **Parameters:**
+    - `contract_id`: The contract to approve
+    - `approver_address`: Wallet address of the approver
+  **Response:** Returns contract status update and transaction confirmation.
+  **Use Case:** Finalize contract agreement after all milestones are complete.
+
+  ## Authentication
+  All endpoints inherit authentication from the collection settings. Configure auth headers or API keys at the collection level.
+
+  ## Environment & Configuration
+  - **Timeout:** Default timeout is 0 (no limit)
+  - **URL Encoding:** Enabled for all requests
+  - **Content-Type:** JSON
+
+  ## Data Types & Placeholders
+  - **Wallet Address:** Use valid blockchain wallet addresses (e.g., `12GCvGvYzr8opQYtx7hKa7VdQsgzbhrTvHBJReoC4KKeUHXZkMV`)
+  - **Contract ID:** SHA-256 hash format (e.g., `bcef9b3876d0d055dd59bbf43c7f9434e88fb4e746d9c850add7a99eb5b4552d`)
+  - **Milestone ID:** SHA-256 hash format
+  - **Unix Timestamp:** Dates represented as seconds since Unix epoch
+  - **Currency Amount:** Numeric value representing cryptocurrency units
+
+  ## Common Response Format
+  Responses typically include:
+  - **status**: Transaction or query status
+  - **data**: Requested information or transaction details
+  - **transaction_id**: Unique identifier for on-chain operations
+  - **error**: Error message if applicable
+
+  ## Error Handling
+  - Invalid wallet addresses return 400 Bad Request
+  - Non-existent contracts/addresses return 404 Not Found
+  - Unauthorized approvals return 403 Forbidden
+  - Server errors return 500 Internal Server Error
+
+  ## Security Considerations
+  - Do not hardcode sensitive wallet addresses or contract IDs
+  - Use environment variables for credentials and addresses
+  - Validate all input before submission
+  - Store private keys securely outside of API calls
+  - Monitor contract approvals for unauthorized access
+
+  ## Notes
+  - All contract and milestone IDs are immutable once created
+  - Blockchain transactions are irreversible
+  - Multiple parties can participate in a single contract
+  - Milestone values are locked at contract creation
+}
