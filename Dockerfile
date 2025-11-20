@@ -38,7 +38,7 @@ FROM --platform=$TARGETPLATFORM alpine:3.22
 
 LABEL maintainer="codila125" \
       description="Foedus Blockchain - Distributed ledger system" \
-      version="0.2.2"
+      version="0.2"
 
 # Environment variables
 ENV FOEDUS_HOME=/app \

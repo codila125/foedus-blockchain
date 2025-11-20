@@ -1,4 +1,4 @@
-# Foedus Blockchain v0.2.2 — Release Notes
+# Foedus Blockchain v0.2 — Release Notes
 
 ## What is Foedus?
 
@@ -8,7 +8,7 @@ Whether you're a freelancer, agency, or enterprise, Foedus provides transparency
 
 ---
 
-## Key Highlights for v0.2.2
+## Key Highlights for v0.2
 
 ### 🚀 **Full-Featured Smart Contracts**
 Create milestone-based project agreements with built-in multi-party verification. Define project phases, attach supporting documents, and automatically release payments when deliverables are approved.
@@ -118,7 +118,7 @@ As work is completed, submit evidence. Once approved, payment is released automa
 
 ---
 
-## Features in v0.2.2
+## Features in v0.2
 
 ✅ **Milestone-Based Smart Contracts** — Define and execute multi-phase projects  
 ✅ **Multi-Party Agreements** — Contracts involving creators, contractors, and arbitrators  
@@ -233,7 +233,7 @@ Foedus is open-source and released under the MIT License. You're free to use, mo
 
 ---
 
-## What's New in v0.2.2
+## What's New in v0.2
 
 ### Improvements
 - Optimized contract verification process
