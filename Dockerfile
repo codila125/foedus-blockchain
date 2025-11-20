@@ -10,6 +10,7 @@ FROM --platform=$BUILDPLATFORM golang:1.25.1-alpine3.22 AS builder
 
 ARG TARGETOS
 ARG TARGETARCH
+ARG TARGETVARIANT
 
 WORKDIR /src
 
@@ -26,7 +27,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 COPY . .
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    GOOS=$TARGETOS GOARCH=$TARGETARCH go build \
+    GOOS=$TARGETOS GOARCH=$TARGETARCH GOARM=${TARGETVARIANT#v} go build \
       -trimpath \
       -ldflags="-s -w -X main.Version=${VERSION:-dev}" \
       -o /out/foedus
