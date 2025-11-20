@@ -111,10 +111,8 @@ docker build -t foedus-blockchain .
 
 ### Pull the published image
 ```bash
-docker pull codila125/foedus-blockchain:0.1.2
+docker pull codila125/foedus-blockchain:latest
 ```
-
-This image is the CI-built artifact for release `0.1.2`; it exposes the same entrypoint and ports as the locally built image but skips the build step so you can try Foedus immediately.
 
 ### Run the paired source + miner stack
 ```bash
@@ -171,8 +169,6 @@ export NODE_ID=3000
 export NODE_ID=3001
 ./foedus
 ```
-
-Nodes automatically discover and sync blockchain state using libp2p protocol `/foedus/1.0.0`.
 
 ## Smart Contracts
 
