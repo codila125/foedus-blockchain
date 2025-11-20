@@ -6,14 +6,15 @@
 # ============================================================================
 # Stage 1: Builder
 # ============================================================================
-FROM golang:1.25.1-alpine3.22 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.25.1-alpine3.22 AS builder
+
+ARG TARGETOS
+ARG TARGETARCH
 
 WORKDIR /src
 
 # Build environment variables
-ENV CGO_ENABLED=0 \
-    GOOS=linux \
-    GOARCH=amd64
+ENV CGO_ENABLED=0
 
 # Cache dependencies layer
 COPY go.mod go.sum ./
@@ -25,7 +26,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 COPY . .
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    go build \
+    GOOS=$TARGETOS GOARCH=$TARGETARCH go build \
       -trimpath \
       -ldflags="-s -w -X main.Version=${VERSION:-dev}" \
       -o /out/foedus
@@ -33,11 +34,11 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # ============================================================================
 # Stage 2: Runtime
 # ============================================================================
-FROM alpine:3.22
+FROM --platform=$TARGETPLATFORM alpine:3.22
 
 LABEL maintainer="codila125" \
       description="Foedus Blockchain - Distributed ledger system" \
-      version="0.1.2"
+      version="0.2.2"
 
 # Environment variables
 ENV FOEDUS_HOME=/app \
@@ -67,10 +68,13 @@ RUN chmod +x /app/scripts/*.sh
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD foedus --health || exit 1
+    CMD ["foedus", "--health"]
 
 # Data volumes - only persistent data and logs require volumes
 VOLUME ["/app/data", "/var/log/foedus"]
+
+# Security: Run as non-root user
+USER foedus
 
 # Expose ports
 EXPOSE 3000 8006 8007
@@ -78,6 +82,3 @@ EXPOSE 3000 8006 8007
 # Use tini as PID 1 for proper signal handling
 ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["/app/scripts/bootstrap-network.sh"]
-
-# Security: Run as non-root user
-USER foedus
