@@ -249,3 +249,44 @@ func (h *Handler) ApproveMilestone(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(contract)
 }
+
+// CancelContract handles the request to cancel a smart contract.
+// It expects a JSON body containing contract_id and canceller_address.
+// It validates the canceller's address, updates the contract's state to canceled,
+// and returns the updated contract as a JSON object with an HTTP 200 OK status.
+func (h *Handler) CancelContract(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ContractID      string `json:"contract_id"`
+		CancellerAddress string `json:"canceller_address"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if req.ContractID == "" {
+		http.Error(w, "contract_id is required", http.StatusBadRequest)
+		return
+	}
+
+	if !wallet.ValidateAddress(req.CancellerAddress) {
+		http.Error(w, "Invalid canceller address: "+req.CancellerAddress, http.StatusBadRequest)
+		return
+	}
+
+	err := h.server.CancelContract(r.Context(), req.ContractID, req.CancellerAddress)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	contract, err := h.server.ContractStatus(r.Context(), req.ContractID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(contract)
+}

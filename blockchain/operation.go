@@ -417,3 +417,28 @@ func (contract *Contract) AllMilestonesCompleted() bool {
 	}
 	return true
 }
+
+// CancelContract allows the creator of the contract to cancel it. This action is only
+// valid when the contract is in the 'ContractCompleted' status. Cancelling a contract
+// changes its status to 'ContractCancelled' and prevents any further actions on it.
+func (contract *Contract) CancelContract(cancellerAddress string) error {
+	if contract.IsCoinbaseOp() {
+		return fmt.Errorf("[CONTRACT] ✗ Coinbase contract cannot be cancelled")
+	}
+
+	if contract.Status == ContractCompleted {
+		log.Printf("[CONTRACT] ✗ Cannot cancel contract %x - invalid status: %s", contract.ID, contract.Status)
+		return fmt.Errorf("[CONTRACT] ✗ Cannot cancel contract - invalid status: %s", contract.Status)
+	}
+
+	if contract.CreatorAddress != cancellerAddress {
+		log.Printf("[CONTRACT] ✗ Only the creator can cancel the contract %x", contract.ID)
+		return fmt.Errorf("[CONTRACT] ✗ Only the creator can cancel the contract")
+	}
+
+	contract.Status = ContractCancelled
+	contract.UpdatedAt = time.Now().Unix()
+	log.Printf("[CONTRACT] ✓ Contract %x has been cancelled by creator %s", contract.ID, contract.CreatorAddress)
+
+	return nil
+}

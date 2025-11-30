@@ -1,0 +1,23 @@
+meta {
+  name: cancelcontract
+  type: http
+  seq: 9
+}
+
+post {
+  url: http://localhost:3000/blockchain/cancelcontract
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "contract_id": "96839f928d01f253fbac951aee033f7670e20e80a313efcc063687cfed7176a1",
+    "canceller_address": "127tFtBBd3mgyyQYV63aprmGTm3H4jf3GkavqD2Pun71fHMNEvw"
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

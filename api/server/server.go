@@ -279,3 +279,24 @@ func (s *Server) Close(ctx context.Context) error {
 
 	return nil
 }
+
+// CancelContract handles the cancellation of a smart contract. It updates the
+// contract's status to "Cancelled" and broadcasts the change to the network.
+func (s *Server) CancelContract(ctx context.Context, contractID string, cancellerAddress string) error {
+	log.Printf("[SERVER] Cancelling contract ID: %s", contractID)
+
+	contract, err := s.chain.FindContract(contractID)
+	if err != nil {
+		return err
+	}
+
+	err = contract.CancelContract(cancellerAddress)
+	if err != nil {
+		return err
+	}
+
+	network.HandleSendContractRequest(s.sourceNode, &contract)
+
+	log.Printf("[SERVER] Contract ID %s cancelled successfully", contractID)
+	return nil
+}
