@@ -55,7 +55,12 @@ func NewMerkleTree(data [][]byte) *MerkleTree {
 		nodes = append(nodes, *node)
 	}
 
-	for i := 0; i < len(data)/2; i++ {
+	for len(nodes) > 1 {
+		// If odd number of nodes, duplicate the last one
+		if len(nodes)%2 != 0 {
+			nodes = append(nodes, nodes[len(nodes)-1])
+		}
+
 		var level []MerkleNode
 
 		for j := 0; j < len(nodes); j += 2 {
