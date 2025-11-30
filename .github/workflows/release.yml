@@ -27,4 +27,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 # git tag -a v0.3 -m "v0.3 — Contract Cancellation"
-# git push
+# git push origin v0.3
