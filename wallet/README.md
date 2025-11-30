@@ -10,10 +10,14 @@ The wallet module provides secure key management and address generation for the 
 
 ```
 wallet/
-├── wallet.go      # Core wallet structure and key pair generation
-├── wallets.go     # Wallet collection management
-├── utils.go       # Base58 encoding/decoding utilities
-└── files.go       # Wallet persistence (Protocol Buffers)
+├── wallet.go       # Core wallet structure and key pair generation
+├── wallet_test.go  # Tests for wallet.go
+├── wallets.go      # Wallet collection management
+├── wallets_test.go # Tests for wallets.go
+├── utils.go        # Base58 encoding/decoding utilities
+├── utils_test.go   # Tests for utils.go
+├── files.go        # Wallet persistence (Protocol Buffers)
+└── files_test.go   # Tests for files.go
 ```
 
 **Components:**
@@ -338,6 +342,79 @@ if !ValidateAddress(address) {
 - `crypto/rand` - Secure random generation
 - `github.com/mr-tron/base58` - Base58 encoding
 - `google.golang.org/protobuf` - Binary serialization
+
+## Testing
+
+The wallet module includes a comprehensive test suite organized to match the source file structure.
+
+### Running Tests
+
+```bash
+# Run all tests
+go test
+
+# Run tests with verbose output
+go test -v
+
+# Run tests for specific file/functionality
+go test -run TestWallet        # wallet.go tests
+go test -run TestWallets       # wallets.go tests  
+go test -run TestBase58        # utils.go tests
+go test -run TestFile          # files.go tests
+go test -run TestLoad          # LoadFile tests
+go test -run TestSave          # SaveFile tests
+
+# Run with race detection
+go test -race
+
+# Run with coverage
+go test -cover
+
+# Run benchmarks
+go test -bench=.
+go test -bench=BenchmarkWallet
+go test -bench=BenchmarkBase58
+```
+
+### Test Coverage
+
+| Source File | Test File | Coverage |
+|-------------|-----------|----------|
+| `wallet.go` | `wallet_test.go` | Key generation, address creation, validation |
+| `wallets.go` | `wallets_test.go` | Collection management, CRUD operations |
+| `utils.go` | `utils_test.go` | Base58 encoding/decoding, round-trip |
+| `files.go` | `files_test.go` | File persistence, permissions, corruption handling |
+
+### Test Categories
+
+**Unit Tests:**
+- `TestPublicKeyHash` - SHA-256 hashing determinism and uniqueness
+- `TestChecksum` - Checksum generation and verification
+- `TestNewKeyPair` - Ed25519 key pair generation
+- `TestMakeWallet` - Wallet creation and initialization
+- `TestWalletAddress` - Address generation and Base58 encoding
+- `TestValidateAddress` - Address validation with valid/invalid inputs
+- `TestBase58Encode/Decode` - Encoding correctness and round-trip
+- `TestWalletsAddWallet` - Adding wallets to collection
+- `TestWalletsGetWallet` - Retrieving wallets by address
+- `TestWalletsSaveAndLoadFile` - File persistence round-trip
+
+**Integration Tests:**
+- `TestWalletIntegration` - Full wallet workflow (create, sign, save, load)
+- `TestConcurrentWalletCreation` - Thread safety verification
+
+**Edge Case Tests:**
+- `TestValidateAddressInvalid` - Corrupted address rejection
+- `TestLoadCorruptedFile` - Handling malformed wallet files
+- `TestWalletFilePermissions` - Security permissions verification
+
+**Benchmarks:**
+- `BenchmarkNewKeyPair` - Key generation performance
+- `BenchmarkMakeWallet` - Wallet creation performance
+- `BenchmarkWalletAddress` - Address generation performance
+- `BenchmarkValidateAddress` - Validation performance
+- `BenchmarkBase58Encode/Decode` - Encoding performance
+- `BenchmarkSaveFile/LoadFile` - File I/O performance
 
 ## Related Modules
 
