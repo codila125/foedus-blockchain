@@ -27,6 +27,16 @@ func NewHandler(server *server.Server) *Handler {
 	}
 }
 
+// Health handles health check requests for container orchestration systems.
+// It returns a simple JSON response with status "ok" and an HTTP 200 OK status.
+// This endpoint is used by Docker, Kubernetes, and other orchestration tools
+// to verify that the service is running and responsive.
+func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
 // CreateWallet handles the request to generate a new cryptographic wallet.
 // On success, it returns the new wallet's address with an HTTP 201 Created status.
 // On failure, it returns an HTTP 500 Internal Server Error.
@@ -158,7 +168,10 @@ func (h *Handler) GetContract(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(contract)
+	if err := json.NewEncoder(w).Encode(contract); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 // ApproveContract handles the request to approve a smart contract.
@@ -199,7 +212,10 @@ func (h *Handler) ApproveContract(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(contract)
+	if err := json.NewEncoder(w).Encode(contract); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 // ApproveMilestone handles the request to approve a milestone within a smart contract.
@@ -247,7 +263,10 @@ func (h *Handler) ApproveMilestone(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(contract)
+	if err := json.NewEncoder(w).Encode(contract); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 // CancelContract handles the request to cancel a smart contract.
@@ -256,7 +275,7 @@ func (h *Handler) ApproveMilestone(w http.ResponseWriter, r *http.Request) {
 // and returns the updated contract as a JSON object with an HTTP 200 OK status.
 func (h *Handler) CancelContract(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ContractID      string `json:"contract_id"`
+		ContractID       string `json:"contract_id"`
 		CancellerAddress string `json:"canceller_address"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -288,5 +307,8 @@ func (h *Handler) CancelContract(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(contract)
+	if err := json.NewEncoder(w).Encode(contract); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
