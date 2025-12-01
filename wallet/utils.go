@@ -21,12 +21,17 @@ func Base58Encode(input []byte) []byte {
 
 // Base58Decode converts a Base58-encoded string back into its original byte
 // slice representation. This function is critical for validating addresses and
-// retrieving the underlying public key hash. It panics if the decoding process
-// fails, as this indicates a malformed or corrupted address.
+// retrieving the underlying public key hash. It returns nil if the decoding
+// process fails due to invalid base58 characters or malformed input.
 func Base58Decode(input []byte) []byte {
+	if len(input) == 0 {
+		return nil
+	}
+
 	decode, err := base58.Decode(string(input[:]))
 	if err != nil {
 		log.Print(err)
+		return nil
 	}
 
 	return decode

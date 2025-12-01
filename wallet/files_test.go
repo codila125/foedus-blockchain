@@ -40,7 +40,7 @@ func TestWalletsSaveAndLoadFile(t *testing.T) {
 
 			// Cleanup
 			walletPath := "./temp/wallets_" + nodeID + ".data"
-			t.Cleanup(func() { os.Remove(walletPath) })
+			t.Cleanup(func() { _ = os.Remove(walletPath) })
 
 			// Save wallets
 			err := ws.SaveFile(nodeID)
@@ -97,7 +97,7 @@ func TestSaveFileCreatesDirectory(t *testing.T) {
 	// Use a unique node ID to avoid conflicts
 	nodeID := "test_dir_creation"
 	walletPath := "./temp/wallets_" + nodeID + ".data"
-	t.Cleanup(func() { os.Remove(walletPath) })
+	t.Cleanup(func() { _ = os.Remove(walletPath) })
 
 	ws := &Wallets{Wallets: make(map[string]*Wallet)}
 	ws.AddWallet()
@@ -117,7 +117,7 @@ func TestSaveFileCreatesDirectory(t *testing.T) {
 func TestSaveFileWithEmptyWallets(t *testing.T) {
 	nodeID := "test_empty_wallets"
 	walletPath := "./temp/wallets_" + nodeID + ".data"
-	t.Cleanup(func() { os.Remove(walletPath) })
+	t.Cleanup(func() { _ = os.Remove(walletPath) })
 
 	ws := &Wallets{Wallets: make(map[string]*Wallet)}
 	err := ws.SaveFile(nodeID)
@@ -141,10 +141,10 @@ func TestSaveFileWithEmptyWallets(t *testing.T) {
 func TestLoadCorruptedFile(t *testing.T) {
 	nodeID := "test_corrupted"
 	walletPath := "./temp/wallets_" + nodeID + ".data"
-	t.Cleanup(func() { os.Remove(walletPath) })
+	t.Cleanup(func() { _ = os.Remove(walletPath) })
 
 	// Ensure temp directory exists
-	os.MkdirAll("./temp", 0o755)
+	_ = os.MkdirAll("./temp", 0o755)
 
 	// Write corrupted data
 	err := os.WriteFile(walletPath, []byte("corrupted data that is not valid protobuf"), 0o600)
@@ -164,7 +164,7 @@ func TestLoadCorruptedFile(t *testing.T) {
 func TestWalletFilePermissions(t *testing.T) {
 	nodeID := "test_permissions"
 	walletPath := filepath.Join("./temp", "wallets_"+nodeID+".data")
-	t.Cleanup(func() { os.Remove(walletPath) })
+	t.Cleanup(func() { _ = os.Remove(walletPath) })
 
 	ws := &Wallets{Wallets: make(map[string]*Wallet)}
 	ws.AddWallet()
@@ -196,12 +196,12 @@ func BenchmarkSaveFile(b *testing.B) {
 	nodeID := "benchmark_save"
 
 	for b.Loop() {
-		ws.SaveFile(nodeID)
+		_ = ws.SaveFile(nodeID)
 	}
 
 	// Cleanup
 	b.StopTimer()
-	os.Remove("./temp/wallets_" + nodeID + ".data")
+	_ = os.Remove("./temp/wallets_" + nodeID + ".data")
 }
 
 func BenchmarkLoadFile(b *testing.B) {
@@ -210,14 +210,14 @@ func BenchmarkLoadFile(b *testing.B) {
 		ws.AddWallet()
 	}
 	nodeID := "benchmark_load"
-	ws.SaveFile(nodeID)
+	_ = ws.SaveFile(nodeID)
 
 	for b.Loop() {
 		loadedWs := &Wallets{}
-		loadedWs.LoadFile(nodeID)
+		_ = loadedWs.LoadFile(nodeID)
 	}
 
 	// Cleanup
 	b.StopTimer()
-	os.Remove("./temp/wallets_" + nodeID + ".data")
+	_ = os.Remove("./temp/wallets_" + nodeID + ".data")
 }

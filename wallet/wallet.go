@@ -45,8 +45,21 @@ func (w Wallet) Address() []byte {
 // ValidateAddress checks if a given blockchain address is valid. It decodes the
 // Base58-encoded address and verifies the checksum to ensure the address has not
 // been tampered with or corrupted. It returns true if the address is valid.
+// This function gracefully handles edge cases like empty strings, short addresses,
+// and invalid base58 characters by returning false instead of panicking.
 func ValidateAddress(address string) bool {
+	// Handle empty or too short addresses
+	if len(address) < checksumLength+2 {
+		return false
+	}
+
 	fullHash := Base58Decode([]byte(address))
+
+	// Handle decode failures (returns nil or empty slice)
+	if fullHash == nil || len(fullHash) < checksumLength+2 {
+		return false
+	}
+
 	actualChecksum := fullHash[len(fullHash)-checksumLength:]
 
 	version := fullHash[0]

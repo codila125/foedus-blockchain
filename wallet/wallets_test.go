@@ -173,7 +173,7 @@ func TestCreateWallets(t *testing.T) {
 func TestCreateWalletsWithExistingFile(t *testing.T) {
 	nodeID := "test_existing_file"
 	walletPath := "./temp/wallets_" + nodeID + ".data"
-	t.Cleanup(func() { os.Remove(walletPath) })
+	t.Cleanup(func() { _ = os.Remove(walletPath) })
 
 	// First create and save some wallets
 	ws := &Wallets{Wallets: make(map[string]*Wallet)}
@@ -208,7 +208,7 @@ func TestCreateWalletsWithExistingFile(t *testing.T) {
 func TestWalletIntegration(t *testing.T) {
 	nodeID := "integration_test"
 	walletPath := "./temp/wallets_" + nodeID + ".data"
-	t.Cleanup(func() { os.Remove(walletPath) })
+	t.Cleanup(func() { _ = os.Remove(walletPath) })
 
 	// Create wallets
 	ws := &Wallets{Wallets: make(map[string]*Wallet)}
