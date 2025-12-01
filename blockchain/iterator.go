@@ -3,6 +3,8 @@
 // the blocks in reverse chronological order.
 package blockchain
 
+import "log"
+
 // Iterator returns a new BlockChainIterator instance, initialized to start at
 // the latest block in the blockchain. This iterator is the primary mechanism for
 // traversing the chain backwards.
@@ -15,19 +17,25 @@ func (blockchain *BlockChain) Iterator() *BlockChainIterator {
 // and then updates the iterator to point to the previous block in the chain.
 // This method allows for iterating through the entire blockchain, one block at a
 // time, from newest to oldest. It returns a pointer to the deserialized block.
+// Returns nil if the block cannot be retrieved (indicates end of chain or database error).
 func (iter *BlockChainIterator) Next() *Block {
 	db := iter.Database.GetRawDB()
 
 	blockData, closer, err := db.Get(iter.CurrentHash)
 	if err != nil {
-		Handle(err)
+		log.Printf("[ITERATOR] Failed to get block %x: %v", iter.CurrentHash, err)
+		return nil
 	}
 
 	blockDataCopy := make([]byte, len(blockData))
 	copy(blockDataCopy, blockData)
-	closer.Close()
+	_ = closer.Close()
 
 	block := DeserializeBlock(blockDataCopy)
+	if block == nil {
+		log.Printf("[ITERATOR] Failed to deserialize block %x", iter.CurrentHash)
+		return nil
+	}
 
 	iter.CurrentHash = block.PrevHash
 

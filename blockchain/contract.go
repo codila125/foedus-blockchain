@@ -3,6 +3,8 @@
 // for creating and managing legally binding agreements on the Foedus blockchain.
 package blockchain
 
+import "errors"
+
 // ContractStatus represents the lifecycle state of a smart contract. Each status
 // indicates a distinct phase, from creation to completion or cancellation.
 type ContractStatus string
@@ -129,4 +131,65 @@ type MilestoneCore struct {
 	Description string
 	Value       int
 	CreatedAt   int64
+}
+
+// ErrMilestoneNegativeValue is returned when a milestone has a negative value.
+var ErrMilestoneNegativeValue = errors.New("milestone value cannot be negative")
+
+// ErrMilestoneEmptyTitle is returned when a milestone has an empty title.
+var ErrMilestoneEmptyTitle = errors.New("milestone title cannot be empty")
+
+// ErrContractEmptyTitle is returned when a contract has an empty title.
+var ErrContractEmptyTitle = errors.New("contract title cannot be empty")
+
+// ErrContractEmptyCreator is returned when a contract has an empty creator address.
+var ErrContractEmptyCreator = errors.New("contract creator address cannot be empty")
+
+// ErrPartyEmptyAddress is returned when a party has an empty address.
+var ErrPartyEmptyAddress = errors.New("party address cannot be empty")
+
+// ErrPartyEmptyRole is returned when a party has an empty role.
+var ErrPartyEmptyRole = errors.New("party role cannot be empty")
+
+// Validate checks if a Milestone has valid values.
+func (m *Milestone) Validate() error {
+	if m.Value < 0 {
+		return ErrMilestoneNegativeValue
+	}
+	if m.Title == "" {
+		return ErrMilestoneEmptyTitle
+	}
+	return nil
+}
+
+// Validate checks if a Contract has valid values.
+func (c *Contract) Validate() error {
+	if c.Title == "" {
+		return ErrContractEmptyTitle
+	}
+	if c.CreatorAddress == "" {
+		return ErrContractEmptyCreator
+	}
+	for _, m := range c.Milestones {
+		if err := m.Validate(); err != nil {
+			return err
+		}
+	}
+	for _, p := range c.Parties {
+		if err := p.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Validate checks if a Party has valid values.
+func (p *Party) Validate() error {
+	if p.Address == "" {
+		return ErrPartyEmptyAddress
+	}
+	if p.Role == "" {
+		return ErrPartyEmptyRole
+	}
+	return nil
 }

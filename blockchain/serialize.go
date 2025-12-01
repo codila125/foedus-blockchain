@@ -34,7 +34,10 @@ func (tx *Transaction) SerializeForSigning() []byte {
 	}
 
 	data, err := proto.Marshal(protoTransaction)
-	Handle(err)
+	if err != nil {
+		log.Printf("[SERIALIZE] Failed to marshal transaction for signing: %v", err)
+		return nil
+	}
 
 	return data
 }
@@ -70,7 +73,10 @@ func (tx *Transaction) SerializeForVerification(inputIndex int) []byte {
 	}
 
 	data, err := proto.Marshal(protoTransaction)
-	Handle(err)
+	if err != nil {
+		log.Printf("[SERIALIZE] Failed to marshal transaction for verification: %v", err)
+		return nil
+	}
 
 	return data
 }
@@ -89,7 +95,10 @@ func (outs TxOutputs) SerializeOutputs() []byte {
 	}
 
 	data, err := proto.Marshal(protoOutputs)
-	Handle(err)
+	if err != nil {
+		log.Printf("[SERIALIZE] Failed to marshal outputs: %v", err)
+		return nil
+	}
 	return data
 }
 
@@ -100,7 +109,8 @@ func DeserializeOutputs(data []byte) TxOutputs {
 	protobufOutputs := &protobuf.TxOutputs{}
 
 	if err := proto.Unmarshal(data, protobufOutputs); err != nil {
-		Handle(err)
+		log.Printf("[SERIALIZE] Failed to unmarshal outputs: %v", err)
+		return TxOutputs{}
 	}
 
 	var outputs TxOutputs
@@ -139,7 +149,10 @@ func (tx *Transaction) SerializeTransaction() []byte {
 	}
 
 	data, err := proto.Marshal(protoTransaction)
-	Handle(err)
+	if err != nil {
+		log.Printf("[SERIALIZE] Failed to marshal transaction: %v", err)
+		return nil
+	}
 
 	return data
 }
@@ -150,7 +163,10 @@ func (tx *Transaction) SerializeTransaction() []byte {
 func DeserializeTransaction(data []byte) Transaction {
 	var tx protobuf.Transaction
 	err := proto.Unmarshal(data, &tx)
-	Handle(err)
+	if err != nil {
+		log.Printf("[SERIALIZE] Failed to unmarshal transaction: %v", err)
+		return Transaction{}
+	}
 
 	var inputs []TxInput
 	var outputs []TxOutput
@@ -186,7 +202,10 @@ func (mm *MilestoneCore) SerializeMilestoneCore() []byte {
 	}
 
 	data, err := proto.Marshal(protoMilestoneCore)
-	Handle(err)
+	if err != nil {
+		log.Printf("[SERIALIZE] Failed to marshal milestone core: %v", err)
+		return nil
+	}
 
 	return data
 }
@@ -429,7 +448,10 @@ func (b *Block) SerializeBlock() []byte {
 	}
 
 	data, err := proto.Marshal(protoBlock)
-	Handle(err)
+	if err != nil {
+		log.Printf("[SERIALIZE] Failed to marshal block: %v", err)
+		return nil
+	}
 
 	return data
 }
@@ -442,7 +464,10 @@ func DeserializeBlock(data []byte) *Block {
 
 	protoBlock := &protobuf.Block{}
 	err := proto.Unmarshal(data, protoBlock)
-	Handle(err)
+	if err != nil {
+		log.Printf("[SERIALIZE] Failed to unmarshal block: %v", err)
+		return nil
+	}
 
 	block.Timestamp = protoBlock.Timestamp
 	block.Hash = protoBlock.Hash

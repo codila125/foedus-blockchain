@@ -5,9 +5,19 @@ package blockchain
 
 import (
 	"bytes"
+	"errors"
 
 	"github.com/codila125/foedus-blockchain/wallet"
 )
+
+// ErrNegativeValue is returned when a transaction output has a negative value.
+var ErrNegativeValue = errors.New("transaction output value cannot be negative")
+
+// ErrEmptyAddress is returned when a transaction output has an empty address.
+var ErrEmptyAddress = errors.New("transaction output address cannot be empty")
+
+// ErrInvalidAddress is returned when a transaction output has an invalid address.
+var ErrInvalidAddress = errors.New("transaction output address is invalid")
 
 // TxOutput represents a transaction output, which is a specific amount of
 // cryptocurrency assigned to a new owner. The output is locked with the public
@@ -36,11 +46,45 @@ type TxOutputs struct {
 
 // NewTxOutput creates a new transaction output with a specified value, locked to
 // a given address. The address is used to derive the public key hash that secures
-// the output.
+// the output. Returns an error if the value is negative or the address is invalid.
 func NewTxOutput(value int, address string) *TxOutput {
+	if value < 0 {
+		return nil
+	}
+	if address == "" {
+		return nil
+	}
 	output := &TxOutput{value, nil}
 	output.Lock([]byte(address)) // Lock the output to the recipient's address
 	return output
+}
+
+// ValidateTxOutput validates a transaction output and returns an error if invalid.
+func (out *TxOutput) Validate() error {
+	if out.Value < 0 {
+		return ErrNegativeValue
+	}
+	if len(out.PubKeyHash) == 0 {
+		return ErrEmptyAddress
+	}
+	return nil
+}
+
+// ValidateTxInput validates a transaction input and returns an error if invalid.
+// For coinbase transactions, ID should be empty and Out should be -1.
+func (in *TxInput) Validate() error {
+	// Coinbase inputs are valid with empty ID and Out = -1
+	if len(in.ID) == 0 && in.Out == -1 {
+		return nil
+	}
+	// Regular inputs must have a valid transaction ID and non-negative output index
+	if len(in.ID) == 0 {
+		return errors.New("transaction input ID cannot be empty")
+	}
+	if in.Out < 0 {
+		return errors.New("transaction input output index cannot be negative")
+	}
+	return nil
 }
 
 // Lock sets the public key hash for the transaction output, effectively "locking"

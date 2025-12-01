@@ -6,10 +6,10 @@ package blockchain
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"os"
-	"runtime"
 
 	"github.com/cockroachdb/pebble"
 	"github.com/codila125/foedus-blockchain/database"
@@ -42,27 +42,37 @@ type BlockChainIterator struct {
 	Database    *database.PebbleDB // A reference to the blockchain's database.
 }
 
+// ErrBlockchainExists is returned when attempting to create a blockchain that already exists.
+var ErrBlockchainExists = errors.New("blockchain already exists")
+
+// ErrBlockchainNotFound is returned when attempting to continue a blockchain that doesn't exist.
+var ErrBlockchainNotFound = errors.New("blockchain not found")
+
 // NewBlockChain creates and initializes a new blockchain for a specific node.
-// If a blockchain already exists at the specified path, the function will exit.
+// If a blockchain already exists at the specified path, it returns ErrBlockchainExists.
 // Otherwise, it creates a genesis block, stores it in the database, and sets it
 // as the first and last block of the chain.
-func NewBlockChain(address string, nodeID string) *BlockChain {
+func NewBlockChain(address string, nodeID string) (*BlockChain, error) {
 	var lastHash []byte
 
 	path := fmt.Sprintf(DBPath, nodeID)
 	if database.DBExists(path) {
 		log.Printf("[BLOCKCHAIN] Blockchain already exists for node %s", nodeID)
-		runtime.Goexit()
+		return nil, ErrBlockchainExists
 	}
 
 	log.Printf("[BLOCKCHAIN] Initializing new blockchain for node %s", nodeID)
 
 	if err := os.MkdirAll(path, 0o755); err != nil {
 		log.Printf("[BLOCKCHAIN] Failed to create blockchain directory: %v", err)
+		return nil, fmt.Errorf("failed to create blockchain directory: %w", err)
 	}
 
 	db, err := database.OpenDB(path)
-	Handle(err)
+	if err != nil {
+		log.Printf("[BLOCKCHAIN] CRITICAL: Failed to open database for node %s: %v", nodeID, err)
+		return nil, fmt.Errorf("failed to open database for node %s: %w", nodeID, err)
+	}
 
 	rawDB := db.GetRawDB()
 	batch := rawDB.NewBatch()
@@ -75,28 +85,34 @@ func NewBlockChain(address string, nodeID string) *BlockChain {
 	genesis := Genesis(cbtx, cbct)
 	log.Printf("[BLOCKCHAIN] Genesis block created - Hash: %x", genesis.Hash)
 
-	err = batch.Set(genesis.Hash, genesis.SerializeBlock(), nil)
-	Handle(err)
-	err = batch.Set([]byte(LastHashKey), genesis.Hash, nil)
-	Handle(err)
+	if err = batch.Set(genesis.Hash, genesis.SerializeBlock(), nil); err != nil {
+		log.Printf("[BLOCKCHAIN] CRITICAL: Failed to store genesis block: %v", err)
+		return nil, fmt.Errorf("failed to store genesis block: %w", err)
+	}
+	if err = batch.Set([]byte(LastHashKey), genesis.Hash, nil); err != nil {
+		log.Printf("[BLOCKCHAIN] CRITICAL: Failed to store last hash: %v", err)
+		return nil, fmt.Errorf("failed to store last hash: %w", err)
+	}
 	lastHash = genesis.Hash
 
-	err = rawDB.Apply(batch, &pebble.WriteOptions{Sync: true})
-	Handle(err)
+	if err = rawDB.Apply(batch, &pebble.WriteOptions{Sync: true}); err != nil {
+		log.Printf("[BLOCKCHAIN] CRITICAL: Failed to apply batch to database: %v", err)
+		return nil, fmt.Errorf("failed to apply batch to database: %w", err)
+	}
 
 	blockchain := BlockChain{lastHash, db}
 	log.Printf("[BLOCKCHAIN] Blockchain initialized successfully for node %s", nodeID)
-	return &blockchain
+	return &blockchain, nil
 }
 
 // ContinueBlockChain loads an existing blockchain from the database for a given node.
 // It retrieves the hash of the last block to set the current tip of the chain.
-// If no blockchain is found, the application exits.
-func ContinueBlockChain(nodeID string) *BlockChain {
+// If no blockchain is found, it returns ErrBlockchainNotFound.
+func ContinueBlockChain(nodeID string) (*BlockChain, error) {
 	path := fmt.Sprintf(DBPath, nodeID)
 	if !database.DBExists(path) {
 		log.Printf("[BLOCKCHAIN] No existing blockchain found for node %s", nodeID)
-		runtime.Goexit()
+		return nil, ErrBlockchainNotFound
 	}
 
 	log.Printf("[BLOCKCHAIN] Loading existing blockchain for node %s", nodeID)
@@ -104,19 +120,23 @@ func ContinueBlockChain(nodeID string) *BlockChain {
 	var lastHash []byte
 
 	db, err := database.OpenDB(path)
-	Handle(err)
+	if err != nil {
+		log.Printf("[BLOCKCHAIN] CRITICAL: Failed to open database for node %s: %v", nodeID, err)
+		return nil, fmt.Errorf("failed to open database for node %s: %w", nodeID, err)
+	}
 
 	lastHashBytes, err := db.Get([]byte(LastHashKey))
 	if err == nil {
 		lastHash = make([]byte, len(lastHashBytes))
 		copy(lastHash, lastHashBytes)
 	} else {
-		log.Printf("[BLOCKCHAIN] Failed to retrieve last hash for node %s: %v", nodeID, err)
+		log.Printf("[BLOCKCHAIN] CRITICAL: Failed to retrieve last hash for node %s: %v", nodeID, err)
+		return nil, fmt.Errorf("failed to retrieve last hash for node %s: %w", nodeID, err)
 	}
 
 	blockchain := BlockChain{lastHash, db}
 	log.Printf("[BLOCKCHAIN] Blockchain loaded successfully with height %d", blockchain.GetBestHeight())
-	return &blockchain
+	return &blockchain, nil
 }
 
 // MineBlock adds a new block to the blockchain. It validates all transactions
@@ -186,8 +206,10 @@ func (blockchain *BlockChain) MineBlock(transactions []*Transaction, contracts [
 	blockchain.LastHash = newBlock.Hash
 	log.Printf("[MINING] Block mined successfully - Hash: %x, Height: %d", newBlock.Hash, newBlock.Height)
 
-	err = db.Apply(batch, &pebble.WriteOptions{Sync: true})
-	Handle(err)
+	if err = db.Apply(batch, &pebble.WriteOptions{Sync: true}); err != nil {
+		log.Printf("[MINING] CRITICAL: Failed to apply block to database: %v", err)
+		return nil
+	}
 
 	utxoSet := UTXOSet{blockchain}
 	utxoSet.Update(newBlock)
@@ -253,8 +275,9 @@ func (blockchain *BlockChain) AddBlock(block *Block) error {
 		log.Printf("[BLOCKCHAIN] Block added to database - Hash: %x, Height: %d", block.Hash, block.Height)
 	}
 
-	err = db.Apply(batch, &pebble.WriteOptions{Sync: true})
-	Handle(err)
+	if err = db.Apply(batch, &pebble.WriteOptions{Sync: true}); err != nil {
+		return fmt.Errorf("failed to apply batch to database: %w", err)
+	}
 
 	utxoSet := UTXOSet{blockchain}
 	utxoSet.Update(block)
@@ -278,7 +301,7 @@ func (blockchain *BlockChain) GetBlock(blockHash []byte) (Block, error) {
 	}
 	blockDataCopy := make([]byte, len(blockData))
 	copy(blockDataCopy, blockData)
-	closer.Close()
+	_ = closer.Close()
 
 	block = *DeserializeBlock(blockDataCopy)
 
@@ -308,19 +331,21 @@ func (blockchain *BlockChain) GetBestHeight() int {
 
 	lastHash, closer, err := db.Get([]byte("lh"))
 	if err != nil {
-		Handle(err)
+		log.Printf("[BLOCKCHAIN] Failed to get last hash: %v", err)
+		return -1
 	}
 	lastHashCopy := make([]byte, len(lastHash))
 	copy(lastHashCopy, lastHash)
-	closer.Close()
+	_ = closer.Close()
 
 	lastBlockData, closer, err := db.Get(lastHashCopy)
 	if err != nil {
-		Handle(err)
+		log.Printf("[BLOCKCHAIN] Failed to get last block data: %v", err)
+		return -1
 	}
 	blockDataCopy := make([]byte, len(lastBlockData))
 	copy(blockDataCopy, lastBlockData)
-	closer.Close()
+	_ = closer.Close()
 
 	lastBlock := *DeserializeBlock(blockDataCopy)
 	return lastBlock.Height

@@ -276,8 +276,9 @@ func CreateContract(title, description string, w *wallet.Wallet, milestones []*M
 	}
 
 	contract.ID = contract.HashContract()
-	err := contract.ApproveContract(w)
-	Handle(err)
+	if err := contract.ApproveContract(w); err != nil {
+		log.Printf("[CONTRACT] Failed to approve contract during creation: %v", err)
+	}
 
 	log.Printf("[CONTRACT] Contract created - ID: %x, Title: %s", contract.ID, title)
 

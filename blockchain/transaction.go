@@ -87,7 +87,10 @@ func (blockchain *BlockChain) SignTransaction(tx *Transaction, privKey ed25519.P
 	prevTXs := make(map[string]Transaction)
 	for _, in := range tx.Inputs {
 		prevTX, err := blockchain.FindTransaction(in.ID)
-		Handle(err)
+		if err != nil {
+			log.Printf("[TRANSACTION] Failed to find previous transaction %x for signing: %v", in.ID, err)
+			continue
+		}
 		prevTXs[hex.EncodeToString(prevTX.ID)] = prevTX
 	}
 	tx.Sign(privKey, prevTXs)
@@ -140,7 +143,10 @@ func NewTransaction(w *wallet.Wallet, to string, amount int, UTXO *UTXOSet) *Tra
 
 	for txid, outs := range validOutputs {
 		txID, err := hex.DecodeString(txid)
-		Handle(err)
+		if err != nil {
+			log.Printf("[TRANSACTION] Failed to decode transaction ID %s: %v", txid, err)
+			continue
+		}
 
 		for _, out := range outs {
 			input := TxInput{txID, out, nil, w.PublicKey}

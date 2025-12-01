@@ -76,17 +76,22 @@ func (i *ICCTSet) Reindex() {
 	for ctID, state := range ICCTs {
 		key, err := hex.DecodeString(ctID)
 		if err != nil {
-			log.Print(err)
+			log.Printf("[ICCT] Failed to decode contract ID %s: %v", ctID, err)
+			continue
 		}
 		key = append(ICCTPrefix, key...)
 
-		err = batch.Set(key, state.SerializeContractState(), nil)
-		Handle(err)
+		if err = batch.Set(key, state.SerializeContractState(), nil); err != nil {
+			log.Printf("[ICCT] Failed to set ICCT for contract %s: %v", ctID, err)
+		}
 	}
 
 	err := db.Apply(batch, &pebble.WriteOptions{Sync: true})
-	batch.Close()
-	Handle(err)
+	_ = batch.Close()
+	if err != nil {
+		log.Printf("[ICCT] CRITICAL: Failed to apply batch during reindex: %v", err)
+		return
+	}
 
 	count := i.CountContracts()
 	log.Printf("[ICCT] ICCT set reindexed successfully - %d incomplete contract(s) in set", count)
@@ -133,7 +138,7 @@ func (i *ICCTSet) Update(block *Block) {
 	if err := db.Apply(batch, pebble.Sync); err != nil {
 		log.Print(err)
 	}
-	batch.Close()
+	_ = batch.Close()
 
 	log.Printf("[ICCT] ICCT set updated successfully")
 }
@@ -179,7 +184,7 @@ func (i *ICCTSet) DeleteByPrefix(prefix []byte) {
 			if err := db.Apply(batch, &pebble.WriteOptions{Sync: true}); err != nil {
 				log.Print(err)
 			}
-			batch.Close()
+			_ = batch.Close()
 
 			keysForDelete = make([][]byte, 0, collectSize) // Reset the slice for the next batch
 			keysCollected = 0
@@ -199,7 +204,7 @@ func (i *ICCTSet) DeleteByPrefix(prefix []byte) {
 		if err := db.Apply(batch, &pebble.WriteOptions{Sync: true}); err != nil {
 			log.Print(err)
 		}
-		batch.Close()
+		_ = batch.Close()
 	}
 }
 
@@ -239,7 +244,7 @@ func (i ICCTSet) GetContract(contractID []byte) (*Contract, error) {
 		}
 		return nil, err
 	}
-	defer closer.Close()
+	defer func() { _ = closer.Close() }()
 
 	dataCopy := make([]byte, len(data))
 	copy(dataCopy, data)

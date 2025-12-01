@@ -84,17 +84,22 @@ func (u *UTXOSet) Reindex() {
 	for txID, outs := range UTXOs {
 		key, err := hex.DecodeString(txID)
 		if err != nil {
-			log.Print(err)
+			log.Printf("[UTXO] Failed to decode transaction ID %s: %v", txID, err)
+			continue
 		}
 		key = append(UTXOPrefix, key...)
 
-		err = batch.Set(key, outs.SerializeOutputs(), nil)
-		Handle(err)
+		if err = batch.Set(key, outs.SerializeOutputs(), nil); err != nil {
+			log.Printf("[UTXO] Failed to set UTXO for tx %s: %v", txID, err)
+		}
 	}
 
 	err := db.Apply(batch, &pebble.WriteOptions{Sync: true})
-	batch.Close()
-	Handle(err)
+	_ = batch.Close()
+	if err != nil {
+		log.Printf("[UTXO] CRITICAL: Failed to apply batch during reindex: %v", err)
+		return
+	}
 
 	count := u.CountTransactions()
 	log.Printf("[UTXO] UTXO set reindexed successfully - %d transaction(s) in set", count)
@@ -118,8 +123,8 @@ func (u *UTXOSet) Update(block *Block) {
 
 				item, closer, err := db.Get(inID)
 				if err != nil && err != pebble.ErrNotFound {
-					closer.Close()
-					Handle(err)
+					_ = closer.Close()
+					log.Printf("[UTXO] Failed to get UTXO for input %x: %v", in.ID, err)
 					continue
 				}
 				if err == pebble.ErrNotFound {
@@ -128,7 +133,7 @@ func (u *UTXOSet) Update(block *Block) {
 
 				itemCopy := make([]byte, len(item))
 				copy(itemCopy, item)
-				closer.Close()
+				_ = closer.Close()
 
 				outs := DeserializeOutputs(itemCopy)
 
@@ -164,7 +169,7 @@ func (u *UTXOSet) Update(block *Block) {
 	if err := db.Apply(batch, pebble.Sync); err != nil {
 		log.Print(err)
 	}
-	batch.Close()
+	_ = batch.Close()
 
 	log.Printf("[UTXO] UTXO set updated successfully")
 }
@@ -207,7 +212,7 @@ func (u *UTXOSet) DeleteByPrefix(prefix []byte) {
 			if err := db.Apply(batch, &pebble.WriteOptions{Sync: true}); err != nil {
 				log.Print(err)
 			}
-			batch.Close()
+			_ = batch.Close()
 			keysForDelete = make([][]byte, 0, collectSize)
 			keysCollected = 0
 		}
@@ -224,7 +229,7 @@ func (u *UTXOSet) DeleteByPrefix(prefix []byte) {
 		if err := db.Apply(batch, &pebble.WriteOptions{Sync: true}); err != nil {
 			log.Print(err)
 		}
-		batch.Close()
+		_ = batch.Close()
 	}
 }
 

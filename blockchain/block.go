@@ -63,11 +63,11 @@ func Genesis(coinbase *Transaction, contractbase *Contract) *Block {
 	return CreateBlock([]*Transaction{coinbase}, []*Contract{contractbase}, []byte{}, 0)
 }
 
-// Handle provides a standardized way of logging errors that occur within the
-// blockchain package. It ensures that all errors are consistently reported,
-// which simplifies debugging and monitoring.
-func Handle(err error) {
+// HandleCritical logs critical errors that could affect blockchain integrity.
+// This should only be used for errors that cannot be recovered from gracefully.
+// For recoverable errors, prefer returning the error to the caller.
+func HandleCritical(err error, context string) {
 	if err != nil {
-		log.Println(err)
+		log.Printf("[CRITICAL] %s: %v", context, err)
 	}
 }
