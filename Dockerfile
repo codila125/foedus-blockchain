@@ -37,8 +37,8 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 FROM --platform=$TARGETPLATFORM alpine:3.22
 
 LABEL maintainer="codila125" \
-      description="Foedus Blockchain - Distributed ledger system" \
-      version="0.2"
+      description="Foedus Blockchain - Immutable Contract Infrastructure for Enterprise" \
+      version="0.4.0"
 
 # Environment variables
 ENV FOEDUS_HOME=/app \
@@ -66,9 +66,9 @@ COPY --from=builder --chown=foedus:foedus /out/foedus /usr/local/bin/foedus
 COPY --chown=foedus:foedus scripts /app/scripts
 RUN chmod +x /app/scripts/*.sh
 
-# Health check
+# Health check for container orchestration
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD ["foedus", "--health"]
+    CMD foedus --health || exit 1
 
 # Data volumes - only persistent data and logs require volumes
 VOLUME ["/app/data", "/var/log/foedus"]

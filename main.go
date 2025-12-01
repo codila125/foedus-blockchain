@@ -42,9 +42,14 @@ func main() {
 	nodeID := os.Getenv("NODE_ID")
 	if nodeID == "" {
 		log.Print("[SERVER] NODE_ID environment variable is not set")
+		os.Exit(1)
 	}
 
-	serve := server.NewServer(nodeID)
+	serve, err := server.NewServer(nodeID)
+	if err != nil {
+		log.Printf("[SERVER] Failed to create server: %v", err)
+		os.Exit(1)
+	}
 	handle := handler.NewHandler(serve)
 	api.RegisterRoutes(handle)
 	srv := api.StartServer(":" + nodeID)
