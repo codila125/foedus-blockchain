@@ -19,6 +19,9 @@ var r *chi.Mux
 func RegisterRoutes(handler *handler.Handler) *chi.Mux {
 	r = chi.NewRouter()
 
+	// Health check endpoint for container orchestration
+	r.Get("/health", handler.Health)
+
 	r.Route("/blockchain", func(r chi.Router) {
 		// GET endpoints for read-only operations
 		r.Get("/createwallet", handler.CreateWallet)
