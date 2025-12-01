@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"runtime"
 )
 
 // Run is the main entry point for the command-line interface. It parses user
@@ -15,11 +14,17 @@ import (
 // It requires the NODE_ID environment variable to be set to identify the current
 // node.
 func (cli *CommandLine) Run() {
+	// Handle --health flag for container health checks (doesn't require NODE_ID)
+	if len(os.Args) == 2 && (os.Args[1] == "--health" || os.Args[1] == "-health") {
+		cli.healthCheck()
+		return
+	}
+
 	cli.validateArgs()
 	nodeID := os.Getenv("NODE_ID")
 	if nodeID == "" {
 		fmt.Printf("NODE_ID env. var is not set!")
-		runtime.Goexit()
+		os.Exit(1)
 	}
 
 	getBalanceCmd := flag.NewFlagSet("getbalance", flag.ExitOnError)
@@ -81,13 +86,13 @@ func (cli *CommandLine) Run() {
 		}
 	default:
 		cli.printUsage()
-		runtime.Goexit()
+		os.Exit(1)
 	}
 
 	if getBalanceCmd.Parsed() {
 		if *getBalanceAddress == "" {
 			getBalanceCmd.Usage()
-			runtime.Goexit()
+			os.Exit(1)
 		}
 		cli.getBalance(*getBalanceAddress, nodeID)
 	}
@@ -95,7 +100,7 @@ func (cli *CommandLine) Run() {
 	if createBlockchainCmd.Parsed() {
 		if *createBlockchainAddress == "" {
 			createBlockchainCmd.Usage()
-			runtime.Goexit()
+			os.Exit(1)
 		}
 		cli.createBlockChain(*createBlockchainAddress, nodeID)
 	}
@@ -117,7 +122,7 @@ func (cli *CommandLine) Run() {
 	if sendCmd.Parsed() {
 		if *sendFrom == "" || *sendTo == "" || *sendAmount <= 0 {
 			sendCmd.Usage()
-			runtime.Goexit()
+			os.Exit(1)
 		}
 
 		cli.send(*sendFrom, *sendTo, *sendAmount, nodeID)
@@ -127,7 +132,7 @@ func (cli *CommandLine) Run() {
 		nodeID := os.Getenv("NODE_ID")
 		if nodeID == "" {
 			startNodeCmd.Usage()
-			runtime.Goexit()
+			os.Exit(1)
 		}
 		cli.startNode(nodeID, *startNodeMiner)
 	}

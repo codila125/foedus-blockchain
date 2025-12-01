@@ -3,8 +3,9 @@ package cli
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"os"
-	"runtime"
+	"time"
 
 	"github.com/codila125/foedus-blockchain/blockchain"
 	"github.com/codila125/foedus-blockchain/network"
@@ -29,6 +30,7 @@ func (cli *CommandLine) printUsage() {
 	fmt.Println(" listaddresses : lists the addresses in our wallet file")
 	fmt.Println(" reindex : rebuilds the UTXO and ICCT sets")
 	fmt.Println(" startnode -source <ADDRESS> : starts a node with ID specified in NODE_ID env. var. -miner enables mining")
+	fmt.Println(" --health : performs a health check for container orchestration (exits 0 if healthy, 1 otherwise)")
 }
 
 // validateArgs checks if the user has provided the minimum required arguments
@@ -36,7 +38,7 @@ func (cli *CommandLine) printUsage() {
 func (cli *CommandLine) validateArgs() {
 	if len(os.Args) < 2 {
 		cli.printUsage()
-		runtime.Goexit()
+		os.Exit(1)
 	}
 }
 
@@ -72,7 +74,11 @@ func (cli *CommandLine) createWallet(nodeID string) {
 // view of each block, including its header, transactions, and contracts.
 // This is useful for debugging and verifying the chain's integrity.
 func (cli *CommandLine) printChain(nodeID string) {
-	chain := blockchain.ContinueBlockChain(nodeID)
+	chain, err := blockchain.ContinueBlockChain(nodeID)
+	if err != nil {
+		log.Printf("[CLI] Failed to load blockchain: %v", err)
+		os.Exit(1)
+	}
 	defer func() {
 		_ = chain.Database.Close()
 	}()
@@ -100,10 +106,15 @@ func (cli *CommandLine) printChain(nodeID string) {
 func (cli *CommandLine) createBlockChain(address string, nodeID string) {
 	if !wallet.ValidateAddress(address) {
 		log.Print("[CLI] Invalid address provided")
+		os.Exit(1)
 	}
 
 	log.Printf("[CLI] Creating new blockchain for address: %s", address)
-	chain := blockchain.NewBlockChain(address, nodeID)
+	chain, err := blockchain.NewBlockChain(address, nodeID)
+	if err != nil {
+		log.Printf("[CLI] Failed to create blockchain: %v", err)
+		os.Exit(1)
+	}
 
 	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
 	UTXOSet.Reindex()
@@ -111,7 +122,7 @@ func (cli *CommandLine) createBlockChain(address string, nodeID string) {
 	ICCTSet := blockchain.ICCTSet{Blockchain: chain}
 	ICCTSet.Reindex()
 
-	chain.Database.Close()
+	_ = chain.Database.Close()
 
 	log.Printf("[CLI] ✓ Blockchain created successfully")
 }
@@ -122,14 +133,19 @@ func (cli *CommandLine) createBlockChain(address string, nodeID string) {
 func (cli *CommandLine) getBalance(address string, nodeID string) {
 	if !wallet.ValidateAddress(address) {
 		log.Print("[CLI] Invalid address provided")
+		os.Exit(1)
 	}
 
 	log.Printf("[CLI] Fetching balance for address: %s", address)
 
-	chain := blockchain.ContinueBlockChain(nodeID)
+	chain, err := blockchain.ContinueBlockChain(nodeID)
+	if err != nil {
+		log.Printf("[CLI] Failed to load blockchain: %v", err)
+		os.Exit(1)
+	}
 	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
 
-	defer chain.Database.Close()
+	defer func() { _ = chain.Database.Close() }()
 
 	balance := 0
 	pubKeyHash := wallet.Base58Decode([]byte(address))
@@ -149,15 +165,21 @@ func (cli *CommandLine) getBalance(address string, nodeID string) {
 func (cli *CommandLine) send(from, to string, amount int, nodeID string) {
 	if !wallet.ValidateAddress(from) {
 		log.Print("[CLI] Invalid sender address")
+		os.Exit(1)
 	}
 	if !wallet.ValidateAddress(to) {
 		log.Print("[CLI] Invalid recipient address")
+		os.Exit(1)
 	}
 
 	log.Printf("[CLI] Initiating transaction: %d from %s to %s", amount, from, to)
 
-	chain := blockchain.ContinueBlockChain(nodeID)
-	defer chain.Database.Close()
+	chain, err := blockchain.ContinueBlockChain(nodeID)
+	if err != nil {
+		log.Printf("[CLI] Failed to load blockchain: %v", err)
+		os.Exit(1)
+	}
+	defer func() { _ = chain.Database.Close() }()
 	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
 
 	wallets, err := wallet.CreateWallets(nodeID)
@@ -183,8 +205,12 @@ func (cli *CommandLine) send(from, to string, amount int, nodeID string) {
 // during network operations.
 func (cli *CommandLine) reindex(nodeID string) {
 	log.Printf("[CLI] Starting UTXO and ICCT reindex operation")
-	chain := blockchain.ContinueBlockChain(nodeID)
-	defer chain.Database.Close()
+	chain, err := blockchain.ContinueBlockChain(nodeID)
+	if err != nil {
+		log.Printf("[CLI] Failed to load blockchain: %v", err)
+		os.Exit(1)
+	}
+	defer func() { _ = chain.Database.Close() }()
 
 	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
 	UTXOSet.Reindex()
@@ -202,4 +228,39 @@ func (cli *CommandLine) reindex(nodeID string) {
 // new blocks and earn rewards, sent to the specified miner address.
 func (cli *CommandLine) startNode(nodeID string, sourceAddress string) {
 	network.RunMinerNode(nodeID, sourceAddress)
+}
+
+// healthCheck performs a health check for container orchestration systems.
+// It verifies that the node's API server is responsive by making an HTTP
+// request to the /health endpoint. Exits with code 0 if healthy, 1 otherwise.
+func (cli *CommandLine) healthCheck() {
+	nodeID := os.Getenv("NODE_ID")
+	if nodeID == "" {
+		nodeID = "3000" // Default port for health checks
+	}
+
+	url := fmt.Sprintf("http://localhost:%s/health", nodeID)
+
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+
+	resp, err := client.Get(url)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Health check failed: %v\n", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to close response body: %v\n", err)
+		}
+	}()
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 400 {
+		fmt.Println("OK")
+		os.Exit(0)
+	}
+
+	fmt.Fprintf(os.Stderr, "Health check failed: status %d\n", resp.StatusCode)
+	os.Exit(1)
 }
