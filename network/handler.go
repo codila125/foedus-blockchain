@@ -25,7 +25,7 @@ func HandleNetworkRequests(h host.Host, chain *blockchain.BlockChain, nodeID str
 		n, err := stream.Read(buf)
 		if err != nil {
 			log.Printf("[NETWORK] Error reading from stream: %v", err)
-			stream.Close()
+			_ = stream.Close()
 			return
 		}
 
@@ -49,7 +49,7 @@ func HandleNetworkRequests(h host.Host, chain *blockchain.BlockChain, nodeID str
 		case "NEW_BLOCK":
 			HandleReceiveNewBlockRequest(h, stream, chain)
 		default:
-			stream.Close()
+			_ = stream.Close()
 		}
 	})
 }
@@ -57,7 +57,7 @@ func HandleNetworkRequests(h host.Host, chain *blockchain.BlockChain, nodeID str
 // HandleGetBlockchainRequest responds to a peer's request for the entire blockchain.
 // It sends all block hashes in chronological order, allowing the peer to reconstruct the chain.
 func HandleGetBlockchainRequest(h host.Host, s network.Stream, chain *blockchain.BlockChain) {
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	blockHashes := chain.GetBlockHashes()
 	log.Printf("[NETWORK] Sending %d blocks to peer %s", len(blockHashes), s.Conn().RemotePeer())
@@ -79,7 +79,7 @@ func HandleGetBlockchainRequest(h host.Host, s network.Stream, chain *blockchain
 // HandleGetBlocksRequest responds to a peer's request for blocks after a specific height.
 // This is used for syncing a peer that is partially behind the current chain height.
 func HandleGetBlocksRequest(h host.Host, s network.Stream, chain *blockchain.BlockChain) {
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	reader := bufio.NewReader(s)
 	lenBuf := make([]byte, 4)
@@ -136,7 +136,7 @@ func HandleGetBlocksRequest(h host.Host, s network.Stream, chain *blockchain.Blo
 // HandleGetVersionRequest responds to a version request from a peer. It sends the local
 // blockchain's height and the hash of the latest block, allowing peers to compare chain states.
 func HandleGetVersionRequest(h host.Host, s network.Stream, chain *blockchain.BlockChain, nodeID string) {
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	height := chain.GetBestHeight()
 	lastHash := chain.LastHash
@@ -195,7 +195,7 @@ func HandleSendContractRequest(node host.Host, contract *blockchain.Contract) {
 			log.Printf("[NETWORK] Error creating stream to %s: %v", peerID, err)
 			continue
 		}
-		defer stream.Close()
+		defer func() { _ = stream.Close() }()
 
 		if err := SendCommand(stream, "NEW_CONTRACT"); err != nil {
 			log.Printf("[NETWORK] Error sending command to %s: %v", peerID, err)
@@ -272,7 +272,7 @@ func HandleSendContractRequest(node host.Host, contract *blockchain.Contract) {
 // HandleReceiveContractRequest processes an incoming contract from a peer. The contract is
 // mined into a new block, and the new block is then broadcast to the network.
 func HandleReceiveContractRequest(h host.Host, s network.Stream, chain *blockchain.BlockChain) {
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	reader := bufio.NewReader(s)
 	lenBuf := make([]byte, 4)
@@ -347,7 +347,7 @@ func HandleReceiveContractRequest(h host.Host, s network.Stream, chain *blockcha
 // HandleReceiveNewBlockRequest processes an incoming block from a peer. It validates the
 // block and, if valid, adds it to the local blockchain.
 func HandleReceiveNewBlockRequest(h host.Host, s network.Stream, chain *blockchain.BlockChain) {
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	reader := bufio.NewReader(s)
 	lenBuf := make([]byte, 4)

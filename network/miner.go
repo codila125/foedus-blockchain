@@ -27,18 +27,18 @@ const (
 
 // createMinerNode initializes a new libp2p host configured for mining operations.
 // It listens on a predefined TCP port and returns the configured host.
-// Panics if the host cannot be created.
-func createMinerNode() host.Host {
+// Returns nil and error if the host cannot be created.
+func createMinerNode() (host.Host, error) {
 	node, err := libp2p.New(
 		libp2p.ListenAddrStrings(
 			"/ip4/0.0.0.0/tcp/8007",
 		),
 	)
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("failed to create miner node: %w", err)
 	}
 
-	return node
+	return node, nil
 }
 
 // RunMinerNode starts and manages a miner node. It handles connecting to the
@@ -46,19 +46,29 @@ func createMinerNode() host.Host {
 // ensures a graceful shutdown on receiving termination signals.
 func RunMinerNode(port, Address string) {
 	log.Printf("[MINER] Starting node with mining enabled for address: %s", Address)
-	minerNode := createMinerNode()
+	minerNode, err := createMinerNode()
+	if err != nil {
+		log.Printf("[MINER] CRITICAL: Failed to create miner node: %v", err)
+		return
+	}
 	PrintNodeID(minerNode)
 	PrintNodeAddresses(minerNode)
 	addr, err := multiaddr.NewMultiaddr(Address)
 	if err != nil {
-		panic(err)
+		log.Printf("[MINER] CRITICAL: Invalid multiaddress %s: %v", Address, err)
+		_ = minerNode.Close()
+		return
 	}
 	peer, err := peerstore.AddrInfoFromP2pAddr(addr)
 	if err != nil {
-		panic(err)
+		log.Printf("[MINER] CRITICAL: Failed to parse peer address: %v", err)
+		_ = minerNode.Close()
+		return
 	}
 	if err := minerNode.Connect(context.Background(), *peer); err != nil {
-		panic(err)
+		log.Printf("[MINER] CRITICAL: Failed to connect to peer %s: %v", peer.ID, err)
+		_ = minerNode.Close()
+		return
 	}
 
 	path := fmt.Sprintf(blockchain.DBPath, port)
@@ -76,10 +86,15 @@ func RunMinerNode(port, Address string) {
 		log.Printf("[BLOCKCHAIN] Existing blockchain found for node %s", port)
 	}
 
-	chain := blockchain.ContinueBlockChain(port)
-	defer chain.Database.Close()
+	chain, err := blockchain.ContinueBlockChain(port)
+	if err != nil {
+		log.Printf("[MINER] CRITICAL: Failed to load blockchain: %v", err)
+		_ = minerNode.Close()
+		return
+	}
+	defer func() { _ = chain.Database.Close() }()
 
-	SyncToLatestBlockchain(minerNode, chain, port)
+	_ = SyncToLatestBlockchain(minerNode, chain, port)
 
 	log.Printf("[MINER] Node is now ready to handle network requests and mine blocks")
 	HandleNetworkRequests(minerNode, chain, port)

@@ -202,7 +202,7 @@ func GetBlockchain(node host.Host, peerID peerstore.ID, nodeID string) error {
 	if err != nil {
 		return err
 	}
-	defer stream.Close()
+	defer func() { _ = stream.Close() }()
 
 	if err := SendCommand(stream, "GET_BLOCKCHAIN"); err != nil {
 		return err
@@ -218,10 +218,10 @@ func GetBlockchain(node host.Host, peerID peerstore.ID, nodeID string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	batchWriter := database.NewBatchWriter(db.GetRawDB(), 100)
-	defer batchWriter.Close(false)
+	defer func() { _ = batchWriter.Close(false) }()
 
 	processBlock := func(serializedBlock []byte, block *blockchain.Block) error {
 		return batchWriter.Write(block.Hash, serializedBlock)
@@ -290,7 +290,7 @@ func RequestVersionFromPeers(node host.Host, chain *blockchain.BlockChain) map[p
 
 		if err := SendCommand(stream, "GET_VERSION"); err != nil {
 			log.Printf("[NETWORK] Error sending GET_VERSION to %s: %v", peerID, err)
-			stream.Close()
+			_ = stream.Close()
 			continue
 		}
 
@@ -299,7 +299,7 @@ func RequestVersionFromPeers(node host.Host, chain *blockchain.BlockChain) map[p
 		_, err = io.ReadFull(reader, lenBuf)
 		if err != nil {
 			log.Printf("[NETWORK] Error reading version length from %s: %v", peerID, err)
-			stream.Close()
+			_ = stream.Close()
 			continue
 		}
 
@@ -308,14 +308,14 @@ func RequestVersionFromPeers(node host.Host, chain *blockchain.BlockChain) map[p
 		_, err = io.ReadFull(reader, buf)
 		if err != nil {
 			log.Printf("[NETWORK] Error reading version data from %s: %v", peerID, err)
-			stream.Close()
+			_ = stream.Close()
 			continue
 		}
 
 		versionDataProto := &protobuf.VersionData{}
 		if err := proto.Unmarshal(buf, versionDataProto); err != nil {
 			log.Printf("[NETWORK] Error unmarshaling version data from %s: %v", peerID, err)
-			stream.Close()
+			_ = stream.Close()
 			continue
 		}
 
@@ -328,7 +328,7 @@ func RequestVersionFromPeers(node host.Host, chain *blockchain.BlockChain) map[p
 			log.Printf("[NETWORK] ✓ Peer %s version: height=%d, node=%s", peerID, versionDataProto.Height, versionDataProto.NodeId)
 		}
 
-		stream.Close()
+		_ = stream.Close()
 	}
 
 	return versions
@@ -384,7 +384,7 @@ func SyncMissingBlocks(node host.Host, peerID peerstore.ID, chain *blockchain.Bl
 	if err != nil {
 		return err
 	}
-	defer stream.Close()
+	defer func() { _ = stream.Close() }()
 
 	if err := SendCommand(stream, "GET_BLOCKS"); err != nil {
 		return err
@@ -499,7 +499,7 @@ func BroadcastBlock(node host.Host, block *blockchain.Block) {
 			log.Printf("[NETWORK] Error creating stream to %s: %v", peerID, err)
 			continue
 		}
-		defer stream.Close()
+		defer func() { _ = stream.Close() }()
 
 		if err := SendCommand(stream, "NEW_BLOCK"); err != nil {
 			log.Printf("[NETWORK] Error sending NEW_BLOCK command to %s: %v", peerID, err)

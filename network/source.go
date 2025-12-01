@@ -1,6 +1,7 @@
 package network
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/codila125/foedus-blockchain/blockchain"
@@ -11,24 +12,30 @@ import (
 
 // createSourceNode creates and initializes a libp2p host node, which serves as the primary
 // entry point for other peers to connect to the network. It listens on a well-known port.
-func createSourceNode() host.Host {
+// Returns the host node and any error encountered during creation.
+func createSourceNode() (host.Host, error) {
 	node, err := libp2p.New(
 		libp2p.ListenAddrStrings(
 			"/ip4/0.0.0.0/tcp/8006",
 		),
 	)
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("failed to create source node: %w", err)
 	}
 
-	return node
+	return node, nil
 }
 
 // RunSourceNode initializes and runs the source node, which acts as a stable anchor
 // in the network. It sets up peer event listeners and handles incoming network requests,
 // facilitating blockchain synchronization and communication for all other nodes.
+// Returns nil and logs an error if the source node cannot be created.
 func RunSourceNode(chain *blockchain.BlockChain, nodeID string) host.Host {
-	sourceNode := createSourceNode()
+	sourceNode, err := createSourceNode()
+	if err != nil {
+		log.Printf("[SOURCE NODE] Failed to create source node: %v", err)
+		return nil
+	}
 	PrintNodeID(sourceNode)
 	PrintNodeAddresses(sourceNode)
 	peerInfo := peerstore.AddrInfo{
