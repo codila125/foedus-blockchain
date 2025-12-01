@@ -47,7 +47,7 @@ func (bw *BatchWriter) Flush(sync bool) error {
 	if err := bw.rawDB.Apply(bw.batch, opts); err != nil {
 		return fmt.Errorf("failed to apply batch: %w", err)
 	}
-	bw.batch.Close()
+	_ = bw.batch.Close()
 	bw.batch = bw.rawDB.NewBatch()
 	return nil
 }
@@ -57,6 +57,6 @@ func (bw *BatchWriter) Close(sync bool) error {
 	if err := bw.Flush(sync); err != nil {
 		return err
 	}
-	bw.batch.Close()
+	_ = bw.batch.Close()
 	return nil
 }
