@@ -27,14 +27,17 @@ type Server struct {
 // NewServer creates and initializes a new API server instance. It continues an
 // existing blockchain from the specified port's data directory and sets up the
 // P2P network node.
-func NewServer(port string) *Server {
-	chain := blockchain.ContinueBlockChain(port)
+func NewServer(port string) (*Server, error) {
+	chain, err := blockchain.ContinueBlockChain(port)
+	if err != nil {
+		return nil, err
+	}
 	sourceNode := network.RunSourceNode(chain, port)
 	return &Server{
 		port:       port,
 		chain:      chain,
 		sourceNode: sourceNode,
-	}
+	}, nil
 }
 
 // CreateWallet generates a new wallet, saves it to the node's wallet file, and
