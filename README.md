@@ -64,8 +64,8 @@ Production-ready Docker deployment with health monitoring, graceful shutdown, an
 
 ```bash
 # Pull and run
-docker pull codila125/foedus-blockchain:0.4.0
-docker run -d -p 3000:3000 --name foedus codila125/foedus-blockchain:0.4.0
+docker pull codila125/foedus-blockchain:latest
+docker run -d -p 3000:3000 --name foedus codila125/foedus-blockchain:latest
 
 # Verify it's running
 curl http://localhost:3000/health
