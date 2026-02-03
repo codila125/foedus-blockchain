@@ -3,7 +3,7 @@
 ![Cover](images/cover-template.png)
 
 <p align="center">
-  <strong>Immutable Contract Infrastructure for Enterprise</strong>
+  <strong>Immutable Contract Infrastructure</strong>
 </p>
 
 <p align="center">
