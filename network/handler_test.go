@@ -527,7 +527,7 @@ func TestVersionDataResponse_Encoding(t *testing.T) {
 			name:     "Normal",
 			height:   100,
 			lastHash: []byte("normal_hash_value"),
-			nodeID:   "node_3001",
+			nodeID:   "node_3009",
 		},
 		{
 			name:     "LongHash",

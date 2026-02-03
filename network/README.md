@@ -6,8 +6,8 @@ P2P networking layer using libp2p.
 
 | Type | Port | Purpose |
 |------|------|---------|
-| Source | 8006 | Network anchor, accepts connections |
-| Miner | 8007 | Mining node, connects to source |
+| Source | 3009 | Network anchor, accepts connections |
+| Miner | 3010 | Mining node, connects to source |
 
 ## Features
 

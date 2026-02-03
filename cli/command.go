@@ -236,7 +236,7 @@ func (cli *CommandLine) startNode(nodeID string, sourceAddress string) {
 func (cli *CommandLine) healthCheck() {
 	nodeID := os.Getenv("NODE_ID")
 	if nodeID == "" {
-		nodeID = "3000" // Default port for health checks
+		nodeID = "3008" // Default port for health checks
 	}
 
 	url := fmt.Sprintf("http://localhost:%s/health", nodeID)

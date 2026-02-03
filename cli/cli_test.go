@@ -91,8 +91,8 @@ func TestNodeIDEnvironment(t *testing.T) {
 		expected string
 	}{
 		{"Empty", "", ""},
-		{"Valid", "3000", "3000"},
-		{"WithPrefix", "node_3001", "node_3001"},
+		{"Valid", "3008", "3008"},
+		{"WithPrefix", "node_3009", "node_3009"},
 	}
 
 	for _, tc := range testCases {

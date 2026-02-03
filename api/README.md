@@ -21,11 +21,11 @@ RESTful HTTP server for blockchain operations.
 
 ```bash
 # Start server
-export NODE_ID=3000
+export NODE_ID=3008
 ./foedus
 
 # Test health
-curl http://localhost:3000/health
+curl http://localhost:3008/health
 ```
 
 ## Structure

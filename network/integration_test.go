@@ -160,7 +160,7 @@ func TestVersionExchange_WithWireFormat(t *testing.T) {
 	versionData := &protobuf.VersionData{
 		Height:   500,
 		LastHash: []byte("test_hash_123456"),
-		NodeId:   "node_3000",
+		NodeId:   "node_3008",
 	}
 
 	protoData, _ := proto.Marshal(versionData)

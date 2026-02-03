@@ -13,7 +13,7 @@ PebbleDB storage layer for blockchain persistence.
 
 ```go
 // Open database
-db, err := database.OpenDB("./data/blocks_3000")
+db, err := database.OpenDB("./data/blocks_3008")
 defer db.Close()
 
 // Read/Write

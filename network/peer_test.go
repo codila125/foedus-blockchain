@@ -261,9 +261,9 @@ func TestMultiaddrFormat(t *testing.T) {
 		addr    string
 		isValid bool
 	}{
-		{"IPv4TCP", "/ip4/127.0.0.1/tcp/8006", true},
-		{"IPv4TCPPeer", "/ip4/127.0.0.1/tcp/8006/p2p/QmExample", true},
-		{"IPv6TCP", "/ip6/::1/tcp/8006", true},
+		{"IPv4TCP", "/ip4/127.0.0.1/tcp/3009", true},
+		{"IPv4TCPPeer", "/ip4/127.0.0.1/tcp/3009/p2p/QmExample", true},
+		{"IPv6TCP", "/ip6/::1/tcp/3009", true},
 		{"Empty", "", false},
 		{"JustProtocol", "/ip4", false},
 	}
@@ -325,8 +325,8 @@ func TestNetworkPorts(t *testing.T) {
 		port     int
 		expected bool
 	}{
-		{"SourceNode", 8006, true},
-		{"MinerNode", 8007, true},
+		{"SourceNode", 3009, true},
+		{"MinerNode", 3010, true},
 		{"PrivilegedPort", 80, false}, // Typically requires root
 		{"HighPort", 65535, true},     // Max valid port
 		{"InvalidPort", 0, false},     // Invalid

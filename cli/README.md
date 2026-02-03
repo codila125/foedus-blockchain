@@ -20,7 +20,7 @@ Command-line interface for blockchain operations.
 
 ```bash
 # Set node ID
-export NODE_ID=3000
+export NODE_ID=3008
 
 # Create blockchain
 ./foedus createblockchain -address <your-address>

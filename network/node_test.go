@@ -37,8 +37,8 @@ func TestMinerShutdownTimeout_Reasonable(t *testing.T) {
 // =============================================================================
 
 func TestMinerNodePort(t *testing.T) {
-	// The miner node listens on port 8007
-	expectedPort := 8007
+	// The miner node listens on port 3010
+	expectedPort := 3010
 
 	// Verify port is in valid range
 	if expectedPort <= 0 || expectedPort > 65535 {
@@ -52,8 +52,8 @@ func TestMinerNodePort(t *testing.T) {
 }
 
 func TestSourceNodePort(t *testing.T) {
-	// The source node listens on port 8006
-	expectedPort := 8006
+	// The source node listens on port 3009
+	expectedPort := 3009
 
 	// Verify port is in valid range
 	if expectedPort <= 0 || expectedPort > 65535 {
@@ -67,8 +67,8 @@ func TestSourceNodePort(t *testing.T) {
 }
 
 func TestNodePorts_NoDuplicates(t *testing.T) {
-	sourcePort := 8006
-	minerPort := 8007
+	sourcePort := 3009
+	minerPort := 3010
 
 	if sourcePort == minerPort {
 		t.Error("Source and Miner nodes should use different ports")
@@ -86,10 +86,10 @@ func TestListenAddressFormat(t *testing.T) {
 		addr     string
 		expected bool
 	}{
-		{"AllInterfaces", "/ip4/0.0.0.0/tcp/8006", true},
-		{"Localhost", "/ip4/127.0.0.1/tcp/8006", true},
-		{"IPv6All", "/ip6/::/tcp/8006", true},
-		{"InvalidProtocol", "/invalid/0.0.0.0/tcp/8006", false},
+		{"AllInterfaces", "/ip4/0.0.0.0/tcp/3009", true},
+		{"Localhost", "/ip4/127.0.0.1/tcp/3009", true},
+		{"IPv6All", "/ip6/::/tcp/3009", true},
+		{"InvalidProtocol", "/invalid/0.0.0.0/tcp/3009", false},
 	}
 
 	for _, tc := range testCases {
@@ -172,10 +172,10 @@ func TestCreateMinerNode_DoesNotPanic(t *testing.T) {
 
 func TestMultiaddr_ValidFormats(t *testing.T) {
 	validFormats := []string{
-		"/ip4/127.0.0.1/tcp/8006",
-		"/ip4/127.0.0.1/tcp/8006/p2p/QmExample",
-		"/ip4/0.0.0.0/tcp/8007",
-		"/ip6/::1/tcp/8006",
+		"/ip4/127.0.0.1/tcp/3009",
+		"/ip4/127.0.0.1/tcp/3009/p2p/QmExample",
+		"/ip4/0.0.0.0/tcp/3010",
+		"/ip6/::1/tcp/3009",
 	}
 
 	for _, addr := range validFormats {
@@ -195,8 +195,8 @@ func TestMultiaddr_InvalidFormats(t *testing.T) {
 	invalidFormats := []string{
 		"",
 		"not-a-multiaddr",
-		"127.0.0.1:8006",
-		"http://localhost:8006",
+		"127.0.0.1:3009",
+		"http://localhost:3009",
 	}
 
 	for _, addr := range invalidFormats {

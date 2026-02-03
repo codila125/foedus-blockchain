@@ -16,7 +16,7 @@ import (
 func createSourceNode() (host.Host, error) {
 	node, err := libp2p.New(
 		libp2p.ListenAddrStrings(
-			"/ip4/0.0.0.0/tcp/8006",
+			"/ip4/0.0.0.0/tcp/3009",
 		),
 	)
 	if err != nil {

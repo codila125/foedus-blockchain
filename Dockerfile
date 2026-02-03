@@ -27,9 +27,9 @@ COPY . .
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     GOOS=$TARGETOS GOARCH=$TARGETARCH go build \
-      -trimpath \
-      -ldflags="-s -w -X main.Version=${VERSION:-dev}" \
-      -o /out/foedus
+    -trimpath \
+    -ldflags="-s -w -X main.Version=${VERSION:-dev}" \
+    -o /out/foedus
 
 # ============================================================================
 # Stage 2: Runtime
@@ -37,23 +37,23 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 FROM --platform=$TARGETPLATFORM alpine:3.22
 
 LABEL maintainer="codila125" \
-      description="Foedus Blockchain - Immutable Contract Infrastructure for Enterprise" \
-      version="0.4.0"
+    description="Foedus Blockchain - Immutable Contract Infrastructure for Enterprise" \
+    version="0.4.0"
 
 # Environment variables
 ENV FOEDUS_HOME=/app \
     FOEDUS_BIN=/usr/local/bin/foedus \
     FOEDUS_LOG_DIR=/var/log/foedus \
     FOEDUS_DATA_DIR=/app/data \
-    SOURCE_NODE_ID=3000 \
-    MINER_NODE_ID=3001
+    SOURCE_NODE_ID=3008 \
+    MINER_NODE_ID=3011
 
 WORKDIR /app
 
 # Install runtime dependencies and create app user
 RUN apk add --no-cache \
-      ca-certificates \
-      tini \
+    ca-certificates \
+    tini \
     && addgroup -S foedus \
     && adduser -S -G foedus foedus \
     && mkdir -p /app/temp "${FOEDUS_LOG_DIR}" "${FOEDUS_DATA_DIR}" \
@@ -77,7 +77,7 @@ VOLUME ["/app/data", "/var/log/foedus"]
 USER foedus
 
 # Expose ports
-EXPOSE 3000 8006 8007
+EXPOSE 3008 3009 3010 3011
 
 # Use tini as PID 1 for proper signal handling
 ENTRYPOINT ["/sbin/tini", "--"]

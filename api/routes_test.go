@@ -115,8 +115,8 @@ func TestStartServer_VariousPorts(t *testing.T) {
 		port string
 	}{
 		{"Default Port", ":8080"},
-		{"Port 3000", ":3000"},
-		{"Port 3001", ":3001"},
+		{"Port 3008", ":3008"},
+		{"Port 3011", ":3011"},
 		{"Port 9000", ":9000"},
 		{"Custom Port", ":12345"},
 	}

@@ -31,7 +31,7 @@ const (
 func createMinerNode() (host.Host, error) {
 	node, err := libp2p.New(
 		libp2p.ListenAddrStrings(
-			"/ip4/0.0.0.0/tcp/8007",
+			"/ip4/0.0.0.0/tcp/3010",
 		),
 	)
 	if err != nil {

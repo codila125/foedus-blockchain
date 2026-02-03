@@ -65,10 +65,10 @@ Production-ready Docker deployment with health monitoring, graceful shutdown, an
 ```bash
 # Pull and run
 docker pull codila125/foedus-blockchain:latest
-docker run -d -p 3000:3000 --name foedus codila125/foedus-blockchain:latest
+docker run -d -p 3008:3008 --name foedus codila125/foedus-blockchain:latest
 
 # Verify it's running
-curl http://localhost:3000/health
+curl http://localhost:3008/health
 # {"status":"ok"}
 ```
 
@@ -80,9 +80,9 @@ docker volume create foedus-logs
 
 docker run -d \
   --name foedus \
-  -p 3000:3000 \
-  -p 8006:8006 \
-  -p 8007:8007 \
+  -p 3008:3008 \
+  -p 3009:3009 \
+  -p 3010:3010 \
   -v foedus-data:/app/data \
   -v foedus-logs:/var/log/foedus \
   codila125/foedus-blockchain:0.4.0
@@ -94,14 +94,14 @@ docker run -d \
 git clone https://github.com/codila125/foedus-blockchain.git
 cd foedus-blockchain
 docker build -t foedus-blockchain .
-docker run -d -p 3000:3000 --name foedus foedus-blockchain
+docker run -d -p 3008:3008 --name foedus foedus-blockchain
 ```
 
 ---
 
 ## API Reference
 
-Base URL: `http://localhost:3000`
+Base URL: `http://localhost:3008`
 
 ### Health Check
 ```
@@ -140,7 +140,7 @@ Returns `{"status":"ok"}` when service is operational.
 ### Create a Contract
 
 ```bash
-curl -X POST http://localhost:3000/blockchain/createcontract/{creator_address} \
+curl -X POST http://localhost:3008/blockchain/createcontract/{creator_address} \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Infrastructure Development Agreement",
@@ -199,17 +199,17 @@ DRAFT → ACTIVE → COMPLETED
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `NODE_ID` | `3000` | API server port |
-| `SOURCE_NODE_ID` | `3000` | Source node identifier |
-| `MINER_NODE_ID` | `3001` | Miner node identifier |
+| `NODE_ID` | `3008` | API server port |
+| `SOURCE_NODE_ID` | `3008` | Source node identifier |
+| `MINER_NODE_ID` | `3011` | Miner node identifier |
 
 ### Ports
 
 | Port | Service |
 |------|---------|
-| `3000` | HTTP API |
-| `8006` | P2P Source Node |
-| `8007` | P2P Miner Node |
+| `3008` | HTTP API |
+| `3009` | P2P Source Node |
+| `3010` | P2P Miner Node |
 
 ### Health Checks
 
