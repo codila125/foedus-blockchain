@@ -4,7 +4,7 @@ go 1.25.1
 
 require (
 	github.com/cockroachdb/pebble v1.1.5
-	github.com/go-chi/chi/v5 v5.2.3
+	github.com/go-chi/chi/v5 v5.2.4
 	github.com/libp2p/go-libp2p v0.44.0
 	github.com/mr-tron/base58 v1.2.0
 	github.com/multiformats/go-multiaddr v0.16.1
